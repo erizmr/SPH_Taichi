@@ -1,3 +1,4 @@
+# WCSPH implementation by mzhang
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -28,31 +29,40 @@ y_min = (h_bound - h) / 2.0
 x_max = w_bound - (w_bound - w) / 2.0
 y_max = h_bound - (h_bound - h) / 2.0
 
-def computeGridIndex(x, y):
-    idx = np.floor(x / (2*dh)).astype(int)
-    idy = np.floor(y / (2*dh)).astype(int)
-    return idx, idy
+screen_res = (800, 400)
+screen_to_world_ratio = 35.0
+bg_color = 0x112f41
+particle_color = 0x068587
+boundary_color = 0xebaca2
+particle_radius = 3.0
+particle_radius_in_world = particle_radius / screen_to_world_ratio
 
-def placeParticles(position_list, paticle_list, wall_mark, bound=0):
-    """position_list: [start_x, start_y, end_x, end_y] """
-    start_x, start_y, end_x, end_y = position_list
-    vel_x, vel_y, p, rho = 0.0, 0.0, 0.0, 1000.0
-    for pos_x in np.arange(start_x, end_x, dx):
-        for pos_y in np.arange(start_y, end_y, dx):
-            paticle_list.append([pos_x, pos_y])
-            if bound:
-                wall_mark.append(0)
-            else:
-                wall_mark.append(1)
 
 def setup():
+    def computeGridIndex(x, y):
+        idx = np.floor(x / (2 * dh)).astype(int)
+        idy = np.floor(y / (2 * dh)).astype(int)
+        return idx, idy
+
+    def placeParticles(position_list, paticle_list, wall_mark, bound=0):
+        # position_list: [start_x, start_y, end_x, end_y]
+        start_x, start_y, end_x, end_y = position_list
+        vel_x, vel_y, p, rho = 0.0, 0.0, 0.0, 1000.0
+        for pos_x in np.arange(start_x, end_x, dx):
+            for pos_y in np.arange(start_y, end_y, dx):
+                paticle_list.append([pos_x, pos_y])
+                if bound:
+                    wall_mark.append(0)
+                else:
+                    wall_mark.append(1)
     particle_list = []
     wall_mark = []
-    # Dam break
+
+    #### Dam break #######
     start_x = x_min + 0.5 * dx
     start_y = y_min - 1.0 * dx
     end_x = start_x + 0.5 * h
-    end_y = start_y + 0.5 * h
+    end_y = start_y + 0.6 * h
 
     ## Constrcut wall
     # Bottom square
@@ -218,7 +228,6 @@ class sph_solver:
             self.d_velocity[i][1] = ti.cast(-9.8, ti.f32)
 
             self.wall_mark_list[i][0] = w_list[i]
-
             self.d_density[i][0] = ti.cast(0.0, ti.f32)
             self.particle_pressure[i][0] = ti.cast(0.0, ti.f32)
             self.particle_density[i][0] = ti.cast(1000.0, ti.f32)
@@ -229,24 +238,30 @@ class sph_solver:
 
     @ti.kernel
     def allocateParticles(self):
+        # Ref to pbf2d example from by Ye Kuang (k-ye)
+        # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
         # allocate particles to grid
         for p_i in self.particle_positions:
             # Compute the grid index on the fly
             cell = self.computeGridIndex(self.particle_positions[p_i])
-            # Use vector as index?
             offs = self.grid_num_particles[cell].atomic_add(1)
             self.grid2particles[cell, offs] = p_i
 
     @ti.func
     def is_in_grid(self, c):
+        # Ref to pbf2d example from by Ye Kuang (k-ye)
+        # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
         return 0 <= c[0] and c[0] < self.grid_x and 0 <= c[1] and c[1] < self.grid_y
 
     @ti.func
     def isFluid(self, p):
+        # check fluid particle or bound particle
         return self.wall_mark_list[p][0]
 
     @ti.kernel
     def search_neighbors(self):
+        # Ref to pbf2d example from by Ye Kuang (k-ye)
+        # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
         for p_i in self.particle_positions:
             pos_i = self.particle_positions[p_i]
             nb_i = 0
@@ -266,12 +281,11 @@ class sph_solver:
 
     @ti.func
     def cubicKernel(self, r, h):
-        """ Return value of cubic spline smoothing kernel"""
+        # value of cubic spline smoothing kernel
         k = 10. / (7. * np.pi * h ** 2)
         q = r / h
         assert q >= 0.0
         res = ti.cast(0.0, ti.f32)
-
         if q <= 1.0:
             res = k * (1 - 1.5 * q ** 2 + 0.75 * q ** 3)
         elif q < 2.0:
@@ -280,7 +294,7 @@ class sph_solver:
 
     @ti.func
     def cubicKernelDerivative(self, r, h):
-        """ Return derivative of cubcic spline smoothing kernel"""
+        # derivative of cubcic spline smoothing kernel
         k = 10. / (7. * np.pi * h ** 2)
         q = r / h
         assert q > 0.0
@@ -293,19 +307,19 @@ class sph_solver:
 
     @ti.func
     def rhoDerivative(self, ptc_i, ptc_j, r, r_mod, h):
-        """Weakly compressible """
+        # density delta
         return self.m * self.cubicKernelDerivative(r_mod, h) \
                * (self.particle_velocity[ptc_i]- self.particle_velocity[ptc_j]).dot(r / r_mod)
 
     @ti.func
     def pUpdate(self, rho, rho_0=1000, gamma=7.0, c_0=20.0):
-        """Weakly compressible, tait function """
+        # Weakly compressible, tait function
         b = rho_0 * c_0 ** 2 / gamma
         return b * ((rho / rho_0) ** gamma - 1.0)
 
     @ti.func
     def pressureForce(self, ptc_i, ptc_j, r, r_mod, h, mirror_pressure=0):
-        """Compute the pressure force contribution, Symmetric Formula"""
+        # Compute the pressure force contribution, Symmetric Formula
         res = ti.Vector([0.0, 0.0])
         # Disable the mirror force, use collision instead
         # Use pressure mirror method to handle boundary leak
@@ -320,7 +334,7 @@ class sph_solver:
 
     @ti.func
     def viscosityForce(self, ptc_i, ptc_j, r, r_mod, h, mu=1e-3):
-        """Compute the viscosity force contribution, Symmetric Formula"""
+        # Compute the viscosity force contribution, Symmetric Formula
         res = ti.Vector([0.0, 0.0])
         res =  mu * (1.0 / self.particle_density[ptc_i][0] ** 2 + 1.0 / self.particle_density[ptc_j][0] ** 2) \
                * self.cubicKernelDerivative(r_mod, h) * (self.particle_velocity[ptc_i]- self.particle_velocity[ptc_j]) / r_mod
@@ -338,7 +352,6 @@ class sph_solver:
         for p_i in self.particle_positions:
             if self.isFluid(p_i) == 1:
                 pos = self.particle_positions[p_i]
-
                 if pos[0] < self.left_bound:
                     self.simualteCollisions(p_i, ti.Vector([1.0, 0.0]), self.left_bound - pos[0])
                 if pos[0] > self.right_bound:
@@ -354,40 +367,46 @@ class sph_solver:
             pos_i = self.particle_positions[p_i]
             d_v = ti.Vector([0.0, 0.0])
             d_rho = 0.0
-            if self.isFluid(p_i) == 1:
-                d_v = ti.Vector([0.0, -9.8])
-                for j in range(self.particle_num_neighbors[p_i]):
-                    p_j = self.particle_neighbors[p_i, j]
-                    pos_j = self.particle_positions[p_j]
+            # if self.isFluid(p_i) == 1:
+            #     d_v = ti.Vector([0.0, -9.8])
+            for j in range(self.particle_num_neighbors[p_i]):
+                p_j = self.particle_neighbors[p_i, j]
+                pos_j = self.particle_positions[p_j]
 
-                    mirror_pressure = 0
-                    if self.isFluid(p_j) == 0:
-                        mirror_pressure = 1
-                    # Compute distance and its mod
-                    r = pos_i - pos_j
-                    r_mod = r.norm()
+                # Disable mirror force
+                # mirror_pressure = 0
+                # if self.isFluid(p_j) == 0:
+                #     mirror_pressure = 1
 
-                    # Compute Density change
-                    d_rho += self.rhoDerivative(p_i, p_j, r, r_mod, self.dh)
+                # Compute distance and its mod
+                r = pos_i - pos_j
+                r_mod = r.norm()
 
+                # Compute Density change
+                d_rho += self.rhoDerivative(p_i, p_j, r, r_mod, self.dh)
+
+                if self.isFluid(p_i) == 1:
                     # Compute Viscosity force contribution
                     d_v += self.viscosityForce(p_i, p_j, r, r_mod, self.dh, self.mu)
 
                     # Compute Pressure force contribution
-                    d_v += self.pressureForce(p_i, p_j, r, r_mod, self.dh, mirror_pressure)
+                    d_v += self.pressureForce(p_i, p_j, r, r_mod, self.dh)
 
+            # Add body force
+            if self.isFluid(p_i) == 1:
+                d_v += ti.Vector([0.0, -9.8])
             self.d_velocity[p_i] = d_v
             self.d_density[p_i][0] = d_rho
 
     @ti.kernel
     def updateTimeStep(self):
+        # Simple Forward Euler currently
         for p_i in self.particle_positions:
-            #pos_i = self.particle_positions[p_i]
             if self.isFluid(p_i) == 1:
                 self.particle_positions[p_i] += self.dt * self.particle_velocity[p_i]
                 self.particle_velocity[p_i] += self.dt * self.d_velocity[p_i]
-                self.particle_density[p_i][0] += self.dt * self.d_density[p_i][0]
-                self.particle_pressure[p_i][0] = self.pUpdate(self.particle_density[p_i][0], self.rho_0, self.gamma, self.c_0)
+            self.particle_density[p_i][0] += self.dt * self.d_density[p_i][0]
+            self.particle_pressure[p_i][0] = self.pUpdate(self.particle_density[p_i][0], self.rho_0, self.gamma, self.c_0)
 
     def solve(self):
         # Compute dt, a naive initial test value
@@ -412,7 +431,7 @@ class sph_solver:
             t += self.dt
             step += 1
 
-            # CFL analysis
+            # CFL analysis, adaptive dt
             dt_cfl = self.dh / max_v
             dt_f = np.sqrt(self.dh / max_a)
             dt_a = self.dh / (self.c_0 * np.sqrt((max_rho / self.rho_0)**self.gamma))
@@ -431,13 +450,16 @@ class sph_solver:
         self.particle_neighbors.fill(-1)
         self.allocateParticles()
         self.search_neighbors()
-        # Compute delta
+        # Compute deltas
         self.computeDeltas()
-        # Update
+        # timestep Update
         self.updateTimeStep()
+        # Handle potential leak particles
         self.enforceBoundary()
 
     def isFluidNP(self, p):
+        # ti.func cannot be called in python scope
+        # for render use
         return self.wall_mark[p]
 
     def render(self, step, gui):
@@ -466,15 +488,6 @@ class sph_solver:
         gui.circles(wall_p, radius=particle_radius, color=boundary_color)
         gui.show()
 
-
-screen_res = (800, 400)
-screen_to_world_ratio = 35.0
-bg_color = 0x112f41
-particle_color = 0x068587
-boundary_color = 0xebaca2
-particle_radius = 3.0
-particle_radius_in_world = particle_radius / screen_to_world_ratio
-
 def main():
     gui = ti.GUI('SPH2D', screen_res)
     grid_shape = makeGrid()
@@ -483,7 +496,9 @@ def main():
     sph.init(sph.particle_list, sph.wall_mark)
     sph.solve()
     print('done')
-main()
+
+if __name__ == '__main__':
+    main()
 
 
 
