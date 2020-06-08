@@ -486,7 +486,8 @@ class sph_solver:
 
         gui.circles(fluid_p, radius=particle_radius, color=particle_color)
         gui.circles(wall_p, radius=particle_radius, color=boundary_color)
-        gui.show()
+        if step%20 == 0:
+            gui.show(f"{step:04d}.png")
 
 def main():
     gui = ti.GUI('SPH2D', screen_res)
