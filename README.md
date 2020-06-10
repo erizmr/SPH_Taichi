@@ -3,7 +3,7 @@ A [Taichi](https://github.com/taichi-dev/taichi) implementation of Weakly Compre
 
 ## Example
 <p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/sph_taichi_new.gif" width="50%" height="50%" />
+  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/sph_hv.gif" width="50%" height="50%" />
 </p>
 
 ## Reference
