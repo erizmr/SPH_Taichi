@@ -137,7 +137,7 @@ class sph_solver:
         # Gravity
         self.g = -9.80
         # viscosity
-        self.mu = 1e-3
+        self.alpha = 0.5
         # reference density
         self.rho_0 = 1000.0
         # CFL coefficient
@@ -306,9 +306,9 @@ class sph_solver:
         return res
 
     @ti.func
-    def rhoDerivative(self, ptc_i, ptc_j, r, r_mod, h):
+    def rhoDerivative(self, ptc_i, ptc_j, r, r_mod):
         # density delta
-        return self.m * self.cubicKernelDerivative(r_mod, h) \
+        return self.m * self.cubicKernelDerivative(r_mod, self.dh) \
                * (self.particle_velocity[ptc_i]- self.particle_velocity[ptc_j]).dot(r / r_mod)
 
     @ti.func
@@ -318,7 +318,7 @@ class sph_solver:
         return b * ((rho / rho_0) ** gamma - 1.0)
 
     @ti.func
-    def pressureForce(self, ptc_i, ptc_j, r, r_mod, h, mirror_pressure=0):
+    def pressureForce(self, ptc_i, ptc_j, r, r_mod, mirror_pressure=0):
         # Compute the pressure force contribution, Symmetric Formula
         res = ti.Vector([0.0, 0.0])
         # Disable the mirror force, use collision instead
@@ -329,15 +329,18 @@ class sph_solver:
         # else:
         res =  -self.m * (self.particle_pressure[ptc_i][0] / self.particle_density[ptc_i][0] ** 2
                           + self.particle_pressure[ptc_j][0] / self.particle_density[ptc_j][0] ** 2) \
-               * self.cubicKernelDerivative(r_mod, h) * r / r_mod
+               * self.cubicKernelDerivative(r_mod, self.dh) * r / r_mod
         return res
 
     @ti.func
-    def viscosityForce(self, ptc_i, ptc_j, r, r_mod, h, mu=1e-3):
-        # Compute the viscosity force contribution, Symmetric Formula
+    def viscosityForce(self, ptc_i, ptc_j, r, r_mod):
+        # Compute the viscosity force contribution, artificial viscosity
         res = ti.Vector([0.0, 0.0])
-        res =  mu * (1.0 / self.particle_density[ptc_i][0] ** 2 + 1.0 / self.particle_density[ptc_j][0] ** 2) \
-               * self.cubicKernelDerivative(r_mod, h) * (self.particle_velocity[ptc_i]- self.particle_velocity[ptc_j]) / r_mod
+        v_xy= (self.particle_velocity[ptc_i]- self.particle_velocity[ptc_j]).dot(r)
+        if v_xy < 0:
+        # Artifical viscosity
+            vmu  = -2.0 * self.alpha * self.dx * self.c_0 / (self.particle_density[ptc_i][0] + self.particle_density[ptc_j][0])
+            res =  -self.m * vmu *  v_xy/(r_mod**2 + 0.01*self.dx**2)* self.cubicKernelDerivative(r_mod, self.dh) * r / r_mod
         return res
 
     @ti.func
@@ -383,18 +386,18 @@ class sph_solver:
                 r_mod = r.norm()
 
                 # Compute Density change
-                d_rho += self.rhoDerivative(p_i, p_j, r, r_mod, self.dh)
+                d_rho += self.rhoDerivative(p_i, p_j, r, r_mod)
 
                 if self.isFluid(p_i) == 1:
                     # Compute Viscosity force contribution
-                    d_v += self.viscosityForce(p_i, p_j, r, r_mod, self.dh, self.mu)
+                    d_v += self.viscosityForce(p_i, p_j, r, r_mod)
 
                     # Compute Pressure force contribution
-                    d_v += self.pressureForce(p_i, p_j, r, r_mod, self.dh)
+                    d_v += self.pressureForce(p_i, p_j, r, r_mod)
 
             # Add body force
             if self.isFluid(p_i) == 1:
-                d_v += ti.Vector([0.0, -9.8])
+                d_v += ti.Vector([0.0, self.g])
             self.d_velocity[p_i] = d_v
             self.d_density[p_i][0] = d_rho
 
@@ -462,7 +465,7 @@ class sph_solver:
         # for render use
         return self.wall_mark[p]
 
-    def render(self, step, gui):
+    def render(self, step, gui, output=False):
         canvas = gui.canvas
         canvas.clear(bg_color)
         pos_np = self.particle_positions.to_numpy()
@@ -486,8 +489,11 @@ class sph_solver:
 
         gui.circles(fluid_p, radius=particle_radius, color=particle_color)
         gui.circles(wall_p, radius=particle_radius, color=boundary_color)
-        if step%20 == 0:
-            gui.show(f"{step:04d}.png")
+        if output:
+            if step%20 == 0:
+                gui.show(f"{step:04d}.png")
+        else:
+            gui.show()
 
 def main():
     gui = ti.GUI('SPH2D', screen_res)
