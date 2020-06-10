@@ -129,7 +129,7 @@ class sph_solver:
     def __init__(self, particle_list,
                  wall_mark,
                  grid,
-                 bound, dx=0.2, max_time=10000, max_steps=1000,gui=None):
+                 bound, alpha=0.5, dx=0.2, max_time=10000, max_steps=1000,gui=None):
         ######## Solver parameters ##########
         self.max_time = max_time
         self.max_steps = max_steps
@@ -137,7 +137,7 @@ class sph_solver:
         # Gravity
         self.g = -9.80
         # viscosity
-        self.alpha = 0.5
+        self.alpha = alpha
         # reference density
         self.rho_0 = 1000.0
         # CFL coefficient
@@ -411,7 +411,7 @@ class sph_solver:
             self.particle_density[p_i][0] += self.dt * self.d_density[p_i][0]
             self.particle_pressure[p_i][0] = self.pUpdate(self.particle_density[p_i][0], self.rho_0, self.gamma, self.c_0)
 
-    def solve(self):
+    def solve(self, output=False):
         # Compute dt, a naive initial test value
         self.dt = 0.1 * self.dh / self.c_0
         print("Time step: ", self.dt)
@@ -444,7 +444,7 @@ class sph_solver:
                       % (step, t, 100*np.max([t / self.max_time, step / self.max_steps]), curr_end-curr_start, curr_end-total_start))
                 print("Max velocity: %s, Max acceleration: %s, Max density: %s, Max pressure: %s" % (max_v, max_a, max_rho, max_pressure))
                 print("Adaptive time step: ", self.dt)
-            self.render(step, self.gui)
+            self.render(step, self.gui, output)
         total_end = time.process_time()
         print("Total time used: %s " % (total_end - total_start))
 
@@ -490,24 +490,24 @@ class sph_solver:
         gui.circles(fluid_p, radius=particle_radius, color=particle_color)
         gui.circles(wall_p, radius=particle_radius, color=boundary_color)
         if output:
-            if step%20 == 0:
+            if step%10 == 0:
                 gui.show(f"{step:04d}.png")
         else:
             gui.show()
 
 def main():
+    OUTPUT = False
     gui = ti.GUI('SPH2D', screen_res)
     grid_shape = makeGrid()
     particle_list,wall_mark, u, b, l, r = setup()
-    sph = sph_solver(particle_list, wall_mark, grid_shape, [u,b,l,r], dx = dx, gui=gui, max_steps=10000)
+    sph = sph_solver(particle_list, wall_mark, grid_shape, [u,b,l,r],alpha=1.0, dx = dx, gui=gui, max_steps=10000)
     sph.init(sph.particle_list, sph.wall_mark)
-    sph.solve()
+    sph.solve(output=OUTPUT)
+
     print('done')
 
 if __name__ == '__main__':
     main()
-
-
 
 
 
