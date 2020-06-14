@@ -8,125 +8,6 @@ import taichi as ti
 
 ti.init(arch=ti.cpu)
 
-df_fac = 1.3
-dx = 0.2
-dh = dx * df_fac
-
-###### Scene parameters ########
-w = 20
-h = 10
-w_bound = 22
-h_bound = 12
-
-bottom_bound = 0.0
-top_bound = 0.0
-left_bound = 0.0
-right_bound = 0.0
-
-assert w_bound > w
-assert h_bound > h
-x_min = (w_bound - w) / 2.0
-y_min = (h_bound - h) / 2.0
-x_max = w_bound - (w_bound - w) / 2.0
-y_max = h_bound - (h_bound - h) / 2.0
-
-screen_res = (800, 400)
-screen_to_world_ratio = 35.0
-bg_color = 0x112f41
-particle_color = 0x068587
-boundary_color = 0xebaca2
-particle_radius = 3.0
-particle_radius_in_world = particle_radius / screen_to_world_ratio
-
-
-def setup():
-    def computeGridIndex(x, y):
-        idx = np.floor(x / (2 * dh)).astype(int)
-        idy = np.floor(y / (2 * dh)).astype(int)
-        return idx, idy
-
-    def placeParticles(position_list, paticle_list, wall_mark, bound=0):
-        # position_list: [start_x, start_y, end_x, end_y]
-        start_x, start_y, end_x, end_y = position_list
-        vel_x, vel_y, p, rho = 0.0, 0.0, 0.0, 1000.0
-        for pos_x in np.arange(start_x, end_x, dx):
-            for pos_y in np.arange(start_y, end_y, dx):
-                paticle_list.append([pos_x, pos_y])
-                if bound:
-                    wall_mark.append(0)
-                else:
-                    wall_mark.append(1)
-
-    particle_list = []
-    wall_mark = []
-
-    #### Dam break #######
-    start_x = x_min + 0.5 * dx
-    start_y = y_min - 1.0 * dx
-    end_x = start_x + 0.5 * h
-    end_y = start_y + 0.6 * h
-
-    ## Constrcut wall
-    # Bottom square
-    b_start_x = 0.0
-    b_start_y = 0.0
-    b_end_x = b_start_x + w
-    b_end_y = b_start_y + y_min - 2 * dx
-
-    bottom_bound = b_end_y
-
-    # Top square
-    t_start_x = 0.0
-    t_start_y = h - y_min + 2 * dx
-    t_end_x = t_start_x + w
-    t_end_y = h
-
-    top_bound = t_start_y
-
-    # left square
-    l_start_x = 0.0
-    l_start_y = y_min - 2 * dx
-    l_end_x = l_start_x + x_min - 2 * dx
-    l_end_y = l_start_y + h - 2 * y_min + 4 * dx
-
-    left_bound = l_end_x
-
-    # right square
-    r_start_x = w - x_min + 2 * dx
-    r_start_y = y_min - 2 * dx
-    r_end_x = w - dx
-    r_end_y = r_start_y + h - 2 * y_min + 4 * dx
-
-    right_bound = r_start_x
-
-    pos_list_fluid = [start_x, start_y, end_x, end_y]
-    placeParticles(pos_list_fluid, particle_list, wall_mark)
-
-    # These are boundaries
-    pos_list_bs = [b_start_x, b_start_y, b_end_x, b_end_y]
-    placeParticles(pos_list_bs, particle_list, wall_mark, bound=1)
-
-    pos_list_ts = [t_start_x, t_start_y, t_end_x, t_end_y]
-    placeParticles(pos_list_ts, particle_list, wall_mark, bound=1)
-
-    pos_list_ls = [l_start_x, l_start_y, l_end_x, l_end_y]
-    placeParticles(pos_list_ls, particle_list, wall_mark, bound=1)
-
-    pos_list_rs = [r_start_x, r_start_y, r_end_x, r_end_y]
-    placeParticles(pos_list_rs, particle_list, wall_mark, bound=1)
-
-    return particle_list, wall_mark, top_bound, bottom_bound, left_bound, right_bound
-
-
-def makeGrid():
-    grid_size = 2 * dh
-    num_x = np.ceil(w_bound / grid_size).astype(int)
-    num_y = np.ceil(h_bound / grid_size).astype(int)
-
-    grid_x = num_x
-    grid_y = num_y
-    return grid_x, grid_y
-
 
 @ti.data_oriented
 class SPHSolver:
@@ -144,14 +25,15 @@ class SPHSolver:
     }
 
     def __init__(self, res, screen_to_world_ratio,
-                 bound, alpha=0.5, dx=0.2, max_num_particles=2 ** 20, max_time=10000, max_steps=1000, gui=None):
+                 bound, alpha=0.5, dx=0.2, max_num_particles=2 ** 20, padding = 12, max_time=10000, max_steps=1000):
         self.dim = len(res)
         self.res = res
         self.screen_to_world_ratio = screen_to_world_ratio
+        # self.padding = padding  / screen_to_world_ratio
+        self.padding = 2*dx
         # Solver parameters
         self.max_time = max_time
         self.max_steps = max_steps
-        self.gui = gui
 
         self.g = -9.80  # Gravity
         self.alpha = alpha  # viscosity
@@ -174,22 +56,8 @@ class SPHSolver:
         self.m = self.dx ** 2 * self.rho_0
         self.max_num_particles = max_num_particles
 
-        # Scene parameters
-        self.w = 20
-        self.h = 10
-        self.w_bound = 22
-        self.h_bound = 12
-
-        assert self.w_bound > self.w
-        assert self.h_bound > self.h
-
         self.grid_size = 2 * self.dh
         self.grid_pos = np.ceil(np.array(res)/self.screen_to_world_ratio/self.grid_size).astype(int)
-
-        self.x_min = (self.w_bound - self.w) / 2.0
-        self.y_min = (self.h_bound - self.h) / 2.0
-        self.x_max = self.w_bound - (self.w_bound - self.w) / 2.0
-        self.y_max = self.h_bound - (self.h_bound - self.h) / 2.0
 
         self.top_bound = bound[0]  # top_bound
         self.bottom_bound = bound[1]  # bottom_bound
@@ -224,7 +92,7 @@ class SPHSolver:
 
         # Reason for 8192?
         ti.root.dynamic(ti.i, max_num_particles,
-                        8192).place(self.particle_positions,
+                        4096).place(self.particle_positions,
                                     self.particle_velocity,
                                     self.particle_pressure,
                                     self.particle_density,
@@ -248,20 +116,6 @@ class SPHSolver:
         nb_node = ti.root.dynamic(ti.i, max_num_particles)
         nb_node.place(self.particle_num_neighbors)
         nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
-
-    # @ti.kernel
-    # def init(self, p_list: ti.ext_arr(), w_list: ti.ext_arr()):
-    #     for i in range(self.particle_numbers):
-    #         for j in ti.static(range(self.dim)):
-    #             self.particle_positions[i][j] = p_list[i, j]
-    #             self.particle_velocity[i][j] = ti.cast(0.0, ti.f32)
-    #         self.d_velocity[i][0] = ti.cast(0.0, ti.f32)
-    #         self.d_velocity[i][1] = ti.cast(-9.8, ti.f32)
-    #
-    #         self.wall_mark_list[i][0] = w_list[i]
-    #         self.d_density[i][0] = ti.cast(0.0, ti.f32)
-    #         self.particle_pressure[i][0] = ti.cast(0.0, ti.f32)
-    #         self.particle_density[i][0] = ti.cast(1000.0, ti.f32)
 
     @ti.func
     def compute_grid_index(self, pos):
@@ -309,7 +163,7 @@ class SPHSolver:
         for p_i in self.particle_positions:
             pos_i = self.particle_positions[p_i]
             nb_i = 0
-            if self.is_fluid(p_i) == 1:
+            if self.is_fluid(p_i) == 1 or self.is_fluid(p_i) == 0:
                 # Compute the grid index on the fly
                 cell = self.compute_grid_index(self.particle_positions[p_i])
                 # offs_list = None
@@ -370,12 +224,6 @@ class SPHSolver:
     def pressure_force(self, ptc_i, ptc_j, r, r_mod, mirror_pressure=0):
         # Compute the pressure force contribution, Symmetric Formula
         res = ti.Vector([0.0, 0.0])
-        # Disable the mirror force, use collision instead
-        # Use pressure mirror method to handle boundary leak
-        # if mirror_pressure == 1:
-        #     res = - self.m * (self.particle_pressure[ptc_i][0]/ self.particle_density[ptc_i][0] ** 2
-        #                       + self.particle_pressure[ptc_i][0]/self.rho_0**2)* self.cubic_kernel_derivative(r_mod, h) * r / r_mod
-        # else:
         res = -self.m * (self.particle_pressure[ptc_i][0] / self.particle_density[ptc_i][0] ** 2
                          + self.particle_pressure[ptc_j][0] / self.particle_density[ptc_j][0] ** 2) \
               * self.cubic_kernel_derivative(r_mod, self.dh) * r / r_mod
@@ -406,14 +254,14 @@ class SPHSolver:
         for p_i in self.particle_positions:
             if self.is_fluid(p_i) == 1:
                 pos = self.particle_positions[p_i]
-                if pos[0] < self.left_bound:
-                    self.simualte_collisions(p_i, ti.Vector([1.0, 0.0]), self.left_bound - pos[0])
-                if pos[0] > self.right_bound:
-                    self.simualte_collisions(p_i, ti.Vector([-1.0, 0.0]), pos[0] - self.right_bound)
-                if pos[1] > self.top_bound:
-                    self.simualte_collisions(p_i, ti.Vector([0.0, -1.0]), pos[1] - self.top_bound)
-                if pos[1] < self.bottom_bound:
-                    self.simualte_collisions(p_i, ti.Vector([0.0, 1.0]), self.bottom_bound - pos[1])
+                if pos[0] < self.left_bound + self.padding:
+                    self.simualte_collisions(p_i, ti.Vector([1.0, 0.0]), self.left_bound + self.padding - pos[0])
+                if pos[0] > self.right_bound - self.padding:
+                    self.simualte_collisions(p_i, ti.Vector([-1.0, 0.0]), pos[0] - self.right_bound + self.padding)
+                if pos[1] > self.top_bound - self.padding:
+                    self.simualte_collisions(p_i, ti.Vector([0.0, -1.0]), pos[1] - self.top_bound + self.padding)
+                if pos[1] < self.bottom_bound + self.padding:
+                    self.simualte_collisions(p_i, ti.Vector([0.0, 1.0]), self.bottom_bound + self.padding - pos[1])
 
     @ti.kernel
     def compute_deltas(self):
@@ -440,7 +288,6 @@ class SPHSolver:
 
                     # Compute Pressure force contribution
                     d_v += self.pressure_force(p_i, p_j, r, r_mod)
-                    #print(d_v)
 
             # Add body force
             if self.is_fluid(p_i) == 1:
@@ -607,22 +454,36 @@ class SPHSolver:
             'position': np_x, 'velocity': np_v, 'material': np_material, 'color': np_color}
 
 def main():
-    res = (400, 400)
+
+    res = (800, 400)
     screen_to_world_ratio = 35
+
+    bg_color = 0x112f41
+    particle_radius = 3.0
+    particle_radius_in_world = particle_radius / screen_to_world_ratio
+
     save_frames = False
     gui = ti.GUI('SPH2D', res, background_color=0x112F41)
-    # grid_shape = makeGrid()
-    #particle_list, wall_mark, u, b, l, r = setup()
-    u, b, l, r = np.array([400, 0, 0, 800]) / screen_to_world_ratio
-    sph = SPHSolver(res, screen_to_world_ratio, [u, b, l, r], alpha=1.0, dx=dx, gui=gui,
+    dx = 0.2
+    u, b, l, r = np.array([res[1], 0, 0, res[0]]) / screen_to_world_ratio
+    sph = SPHSolver(res, screen_to_world_ratio, [u, b, l, r], alpha=0.5, dx=dx,
                      max_steps=10000)
 
-    sph.add_cube(lower_corner=[2, 2],
-                 cube_size=[2, 2],
-                 velocity=[0.1, -5],
+    sph.add_cube(lower_corner=[2*dx, 2*dx],
+                 cube_size=[2, 6],
+                 velocity=[0.0, 0.0],
                  density=[1000],
                  material=SPHSolver.material_fluid)
-    colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00], dtype=np.uint32)
+
+    # Add boundary
+    sph.add_cube(lower_corner=[0.0, 0.0],
+                 cube_size=[res[0]/screen_to_world_ratio, 2*dx],
+                 velocity=[0.0, 0.0],
+                 density=[1000],
+                 material=SPHSolver.material_bound)
+
+    colors = np.array([0xED553B, 0x068587, 0xEEEEF0, 0xFFFF00], dtype=np.uint32)
+    boundary_color = 0xebaca2
 
     t = 0.0
     frame = 1
@@ -632,11 +493,24 @@ def main():
         dt = sph.step(frame, t, total_start)
         particles = sph.particle_info()
 
+        # if frame == 200:
+        #     sph.add_cube(lower_corner=[3, 3],
+        #                  cube_size=[1.5, 1.5],
+        #                  velocity=[0.1, -5],
+        #                  density=[1000],
+        #                  material=SPHSolver.material_fluid)
+
         for pos in particles['position']:
             for j in range(len(res)):
                 pos[j] *= screen_to_world_ratio / res[j]
-        #print(particles['material'])
+
         gui.circles(particles['position'], radius=3.0, color=colors[particles['material']])
+        canvas = gui.canvas
+        canvas.rect(ti.vec(0, 0), ti.vec(0.0,
+               res[1]/screen_to_world_ratio)).radius(1.5).color(boundary_color).close().finish()
+        canvas.rect(ti.vec(res[0]/screen_to_world_ratio, 0), ti.vec(0.0,
+                                         res[1] / screen_to_world_ratio)).radius(1.5).color(
+            boundary_color).close().finish()
         gui.show(f'{frame:06d}.png' if save_frames else None)
 
         frame += 1
