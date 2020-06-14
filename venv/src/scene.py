@@ -143,12 +143,11 @@ class SPHSolver:
         'bound': material_bound
     }
 
-    def __init__(self, res, particle_list,
-                 wall_mark,
-                 grid,
+    def __init__(self, res, screen_to_world_ratio,
                  bound, alpha=0.5, dx=0.2, max_num_particles=2 ** 20, max_time=10000, max_steps=1000, gui=None):
         self.dim = len(res)
-
+        self.res = res
+        self.screen_to_world_ratio = screen_to_world_ratio
         # Solver parameters
         self.max_time = max_time
         self.max_steps = max_steps
@@ -159,12 +158,19 @@ class SPHSolver:
         self.rho_0 = 1000.0  # reference density
         self.CFL = 0.20  # CFL coefficient
 
+        self.df_fac = 1.3
+        self.dx = dx
+        self.dh = self.dx * self.df_fac
+        self.kernel_norm = 10. / (7. * np.pi * self.dh ** 2)
+
         # Pressure state function parameters(WCSPH)
         self.gamma = 7.0
         self.c_0 = 20.0
 
+        # Compute dt, a naive initial test value
+        self.dt = 0.1 * self.dh / self.c_0
+
         # Particle parameters
-        self.dx = dx
         self.m = self.dx ** 2 * self.rho_0
         self.max_num_particles = max_num_particles
 
@@ -176,6 +182,10 @@ class SPHSolver:
 
         assert self.w_bound > self.w
         assert self.h_bound > self.h
+
+        self.grid_size = 2 * self.dh
+        self.grid_pos = np.ceil(np.array(res)/self.screen_to_world_ratio/self.grid_size).astype(int)
+
         self.x_min = (self.w_bound - self.w) / 2.0
         self.y_min = (self.h_bound - self.h) / 2.0
         self.x_max = self.w_bound - (self.w_bound - self.w) / 2.0
@@ -185,16 +195,6 @@ class SPHSolver:
         self.bottom_bound = bound[1]  # bottom_bound
         self.left_bound = bound[2]  # left_bound
         self.right_bound = bound[3]  # right_bound
-
-        self.df_fac = 1.3
-        self.dx = 0.2
-        self.dh = self.dx * self.df_fac
-        self.kernel_norm = 10. / (7. * np.pi * self.dh ** 2)
-
-        # Particles
-        self.particle_numbers = len(particle_list)
-        self.grid_x = grid[0]
-        self.grid_y = grid[1]
 
         # Fill particles use
         self.source_bound = ti.Vector(self.dim, dt=ti.f32, shape=2)
@@ -211,14 +211,8 @@ class SPHSolver:
         self.color = ti.var(dt=ti.f32)
         self.material = ti.var(dt=ti.f32)
 
-        # Fluid or bound particles
-        self.wall_mark_list = ti.Vector(1, dt=ti.f32)
-
         self.d_velocity = ti.Vector(self.dim, dt=ti.f32)
         self.d_density = ti.Vector(1, dt=ti.f32)
-
-        self.particle_list = np.array(particle_list)
-        self.wall_mark = np.array(wall_mark)
 
         self.grid_num_particles = ti.var(ti.i32)
         self.grid2particles = ti.var(ti.i32)
@@ -228,7 +222,7 @@ class SPHSolver:
         self.max_num_particles_per_cell = 100
         self.max_num_neighbors = 100
 
-        # Why 8192?
+        # Reason for 8192?
         ti.root.dynamic(ti.i, max_num_particles,
                         8192).place(self.particle_positions,
                                     self.particle_velocity,
@@ -239,59 +233,70 @@ class SPHSolver:
                                     self.material,
                                     self.color)
 
-        # ti.root.dense(ti.i, self.particle_numbers).place(self.particle_positions,
-        #                                                  self.particle_velocity, self.particle_pressure,
-        #                                                  self.particle_density, self.d_velocity, self.d_density,
-        #                                                  self.wall_mark_list)
-        ti.root.dense(ti.i, self.particle_numbers).place(self.wall_mark_list)
+        if self.dim == 2:
+            grid_snode = ti.root.dense(ti.ij, self.grid_pos)
+            grid_snode.place(self.grid_num_particles)
+            grid_snode.dense(ti.k, self.max_num_particles_per_cell).place(self.grid2particles)
+        else:
+            grid_snode = ti.root.dense(ti.ijk, self.grid_pos)
+            grid_snode.place(self.grid_num_particles)
+            grid_snode.dense(ti.l, self.max_num_particles_per_cell).place(self.grid2particles)
 
-        grid_snode = ti.root.dense(ti.ij, (self.grid_x, self.grid_y))
-        grid_snode.place(self.grid_num_particles)
-        grid_snode.dense(ti.k, self.max_num_particles_per_cell).place(self.grid2particles)
-
-        nb_node = ti.root.dense(ti.i, self.particle_numbers)
+        # nb_node = ti.root.dense(ti.i, self.particle_num)
+        # nb_node.place(self.particle_num_neighbors)
+        # nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
+        nb_node = ti.root.dynamic(ti.i, max_num_particles)
         nb_node.place(self.particle_num_neighbors)
         nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
 
-    @ti.kernel
-    def init(self, p_list: ti.ext_arr(), w_list: ti.ext_arr()):
-        for i in range(self.particle_numbers):
-            for j in ti.static(range(self.dim)):
-                self.particle_positions[i][j] = p_list[i, j]
-                self.particle_velocity[i][j] = ti.cast(0.0, ti.f32)
-            self.d_velocity[i][0] = ti.cast(0.0, ti.f32)
-            self.d_velocity[i][1] = ti.cast(-9.8, ti.f32)
-
-            self.wall_mark_list[i][0] = w_list[i]
-            self.d_density[i][0] = ti.cast(0.0, ti.f32)
-            self.particle_pressure[i][0] = ti.cast(0.0, ti.f32)
-            self.particle_density[i][0] = ti.cast(1000.0, ti.f32)
+    # @ti.kernel
+    # def init(self, p_list: ti.ext_arr(), w_list: ti.ext_arr()):
+    #     for i in range(self.particle_numbers):
+    #         for j in ti.static(range(self.dim)):
+    #             self.particle_positions[i][j] = p_list[i, j]
+    #             self.particle_velocity[i][j] = ti.cast(0.0, ti.f32)
+    #         self.d_velocity[i][0] = ti.cast(0.0, ti.f32)
+    #         self.d_velocity[i][1] = ti.cast(-9.8, ti.f32)
+    #
+    #         self.wall_mark_list[i][0] = w_list[i]
+    #         self.d_density[i][0] = ti.cast(0.0, ti.f32)
+    #         self.particle_pressure[i][0] = ti.cast(0.0, ti.f32)
+    #         self.particle_density[i][0] = ti.cast(1000.0, ti.f32)
 
     @ti.func
-    def computeGridIndex(self, pos):
-        return (pos / (2 * dh)).cast(int)
+    def compute_grid_index(self, pos):
+        return (pos / (2 * self.dh)).cast(int)
 
     @ti.kernel
-    def allocateParticles(self):
+    def allocate_particles(self):
         # Ref to pbf2d example from by Ye Kuang (k-ye)
         # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
         # allocate particles to grid
         for p_i in self.particle_positions:
-            # Compute the grid index on the fly
-            cell = self.computeGridIndex(self.particle_positions[p_i])
+            # Compute the grid index
+            cell = self.compute_grid_index(self.particle_positions[p_i])
             offs = self.grid_num_particles[cell].atomic_add(1)
             self.grid2particles[cell, offs] = p_i
 
     @ti.func
     def is_in_grid(self, c):
-        # Ref to pbf2d example from by Ye Kuang (k-ye)
-        # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
-        return 0 <= c[0] and c[0] < self.grid_x and 0 <= c[1] and c[1] < self.grid_y
+        res = 0
+        # if self.dim == 2:
+        #     if 0 <= c[0] and c[0] < self.grid_pos[0] and 0 <= c[1] and c[1] < self.grid_pos[1]:
+        #         res = 1
+        # else:
+        #     if 0 <= c[0] and c[0] < self.grid_pos[0] \
+        #             and 0 <= c[1] and c[1] < self.grid_pos[1] \
+        #             and 0 <= c[2] and c[2] < self.grid_pos[2]:
+        #         res = 1
+        for i in ti.static(range(self.dim)):
+            res = res and (0 <= c[i] and c[i] < self.grid_pos[i])
+        return res
 
     @ti.func
     def is_fluid(self, p):
         # check fluid particle or bound particle
-        return self.wall_mark_list[p][0]
+        return self.material[p]
 
     @ti.kernel
     def search_neighbors(self):
@@ -302,7 +307,7 @@ class SPHSolver:
             nb_i = 0
             if self.is_fluid(p_i) == 1:
                 # Compute the grid index on the fly
-                cell = self.computeGridIndex(self.particle_positions[p_i])
+                cell = self.compute_grid_index(self.particle_positions[p_i])
                 for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
                     cell_to_check = cell + offs
                     if self.is_in_grid(cell_to_check):
@@ -450,19 +455,18 @@ class SPHSolver:
                                                           self.c_0)
 
     def solve(self, output=False):
-        # Compute dt, a naive initial test value
-        self.dt = 0.1 * self.dh / self.c_0
         print("Time step: ", self.dt)
         print("Domain: (%s, %s, %s, %s)" % (self.x_min, self.x_max, self.y_min, self.y_max), )
         print("Fluid area: (%s, %s, %s, %s)" % (self.left_bound, self.right_bound, self.bottom_bound, self.top_bound))
-        print("Grid: (%d, %d)" % (self.grid_x, self.grid_y))
+        print("Grid: ", self.grid_pos)
 
-        step = 1
+        frame = 1
         t = 0.0
         total_start = time.process_time()
-        while t < self.max_time and step < self.max_steps:
+        while t < self.max_time and frame < self.max_steps:
             curr_start = time.process_time()
-            self.solve_update()
+            self.step()
+
             max_v = np.max(np.linalg.norm(self.particle_velocity.to_numpy(), 2, axis=1))
             max_a = np.max(np.linalg.norm(self.d_velocity.to_numpy(), 2, axis=1))
             max_rho = np.max(self.particle_density.to_numpy())
@@ -470,28 +474,28 @@ class SPHSolver:
 
             curr_end = time.process_time()
             t += self.dt
-            step += 1
+            frame += 1
 
             # CFL analysis, adaptive dt
             dt_cfl = self.dh / max_v
             dt_f = np.sqrt(self.dh / max_a)
             dt_a = self.dh / (self.c_0 * np.sqrt((max_rho / self.rho_0) ** self.gamma))
             self.dt = self.CFL * np.min([dt_cfl, dt_f, dt_a])
-            if step % 10 == 0:
+            if frame % 10 == 0:
                 print("Step: %d, physics time: %s, progress: %s %%, time used: %s, total time used: %s"
-                      % (step, t, 100 * np.max([t / self.max_time, step / self.max_steps]), curr_end - curr_start,
+                      % (frame, t, 100 * np.max([t / self.max_time, frame / self.max_steps]), curr_end - curr_start,
                          curr_end - total_start))
                 print("Max velocity: %s, Max acceleration: %s, Max density: %s, Max pressure: %s" % (
                 max_v, max_a, max_rho, max_pressure))
                 print("Adaptive time step: ", self.dt)
-            self.render(step, self.gui, output)
+            #self.render(step, self.gui, output)
         total_end = time.process_time()
         print("Total time used: %s " % (total_end - total_start))
 
-    def solve_update(self):
+    def step(self):
         self.grid_num_particles.fill(0)
         self.particle_neighbors.fill(-1)
-        self.allocateParticles()
+        self.allocate_particles()
         self.search_neighbors()
         # Compute deltas
         self.compute_deltas()
@@ -599,40 +603,40 @@ class SPHSolver:
         return {
             'position': np_x, 'velocity': np_v, 'material': np_material, 'color': np_color}
 
-    def is_fluidNP(self, p):
-        # ti.func cannot be called in python scope
-        # for render use
-        return self.wall_mark[p]
+    # def is_fluidNP(self, p):
+    #     # ti.func cannot be called in python scope
+    #     # for render use
+    #     return self.wall_mark[p]
 
-    def render(self, step, gui, output=False):
-        canvas = gui.canvas
-        canvas.clear(bg_color)
-        pos_np = self.particle_positions.to_numpy()
-        fluid_p = []
-        wall_p = []
-        for i, pos in enumerate(pos_np):
-            if self.is_fluidNP(i) == 1:
-                fluid_p.append(pos)
-            else:
-                wall_p.append(pos)
-        fluid_p = np.array(fluid_p)
-        wall_p = np.array(wall_p)
-
-        for pos in fluid_p:
-            for j in range(self.dim):
-                pos[j] *= screen_to_world_ratio / screen_res[j]
-
-        for pos in wall_p:
-            for j in range(self.dim):
-                pos[j] *= screen_to_world_ratio / screen_res[j]
-
-        gui.circles(fluid_p, radius=particle_radius, color=particle_color)
-        gui.circles(wall_p, radius=particle_radius, color=boundary_color)
-        if output:
-            if step % 10 == 0:
-                gui.show(f"{step:04d}.png")
-        else:
-            gui.show()
+    # def render(self, step, gui, output=False):
+    #     canvas = gui.canvas
+    #     canvas.clear(bg_color)
+    #     pos_np = self.particle_positions.to_numpy()
+    #     fluid_p = []
+    #     wall_p = []
+    #     for i, pos in enumerate(pos_np):
+    #         if self.is_fluidNP(i) == 1:
+    #             fluid_p.append(pos)
+    #         else:
+    #             wall_p.append(pos)
+    #     fluid_p = np.array(fluid_p)
+    #     wall_p = np.array(wall_p)
+    #
+    #     for pos in fluid_p:
+    #         for j in range(self.dim):
+    #             pos[j] *= screen_to_world_ratio / screen_res[j]
+    #
+    #     for pos in wall_p:
+    #         for j in range(self.dim):
+    #             pos[j] *= screen_to_world_ratio / screen_res[j]
+    #
+    #     gui.circles(fluid_p, radius=particle_radius, color=particle_color)
+    #     gui.circles(wall_p, radius=particle_radius, color=boundary_color)
+    #     if output:
+    #         if step % 10 == 0:
+    #             gui.show(f"{step:04d}.png")
+    #     else:
+    #         gui.show()
 
 
 def main():
@@ -641,18 +645,20 @@ def main():
     gui = ti.GUI('SPH2D', screen_res, background_color=0x112F41)
     grid_shape = makeGrid()
     particle_list, wall_mark, u, b, l, r = setup()
-    sph = SPHSolver(res, particle_list, wall_mark, grid_shape, [u, b, l, r], alpha=1.0, dx=dx, gui=gui,
+    sph = SPHSolver(res, screen_to_world_ratio, [u, b, l, r], alpha=1.0, dx=dx, gui=gui,
                      max_steps=10000)
-    #sph.init(sph.particle_list, sph.wall_mark)
 
     sph.add_cube(lower_corner=[2, 2],
                  cube_size=[2, 3],
                  velocity=[0, 0],
+                 density=[1000],
                  material=SPHSolver.material_fluid)
-    # sph.solve(output=OUTPUT)
+    particles = sph.particle_info()
+    print(len(particles['position']))
+    sph.solve()
 
     colors = np.array([0x068587, 0xED553B, 0xEEEEF0, 0xFFFF00], dtype=np.uint32)
-    particles = sph.particle_info()
+
     print(particles['position'])
     print(particles['position'].shape)
     for pos in particles['position']:
