@@ -47,7 +47,7 @@ class SPHSolver:
 
         # Pressure state function parameters(WCSPH)
         self.gamma = 7.0
-        self.c_0 = 20.0
+        self.c_0 = 50.0
 
         # Compute dt, a naive initial test value
         self.dt = 0.1 * self.dh / self.c_0
@@ -110,9 +110,6 @@ class SPHSolver:
             grid_snode.place(self.grid_num_particles)
             grid_snode.dense(ti.l, self.max_num_particles_per_cell).place(self.grid2particles)
 
-        # nb_node = ti.root.dense(ti.i, self.particle_num)
-        # nb_node.place(self.particle_num_neighbors)
-        # nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
         nb_node = ti.root.dynamic(ti.i, max_num_particles)
         nb_node.place(self.particle_num_neighbors)
         nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
@@ -135,14 +132,6 @@ class SPHSolver:
     @ti.func
     def is_in_grid(self, c):
         res = 1
-        # if self.dim == 2:
-        #     if 0 <= c[0] and c[0] < self.grid_pos[0] and 0 <= c[1] and c[1] < self.grid_pos[1]:
-        #         res = 1
-        # else:
-        #     if 0 <= c[0] and c[0] < self.grid_pos[0] \
-        #             and 0 <= c[1] and c[1] < self.grid_pos[1] \
-        #             and 0 <= c[2] and c[2] < self.grid_pos[2]:
-        #         res = 1
         for i in ti.static(range(self.dim)):
             res = ti.atomic_and(res, (0 <= c[i] and c[i] < self.grid_pos[i]))
         return res
@@ -154,7 +143,7 @@ class SPHSolver:
 
     def stencil_range(self):
         # for item in ti.ndrange(*((-1, 2)*self.dim)):
-        return ti.ndrange(*((-1, 2)*self.dim))
+        return ti.ndrange(*(((-1, 2),)*self.dim))
 
     @ti.kernel
     def search_neighbors(self):
@@ -166,12 +155,7 @@ class SPHSolver:
             if self.is_fluid(p_i) == 1 or self.is_fluid(p_i) == 0:
                 # Compute the grid index on the fly
                 cell = self.compute_grid_index(self.particle_positions[p_i])
-                # offs_list = None
-                # if self.dim == 2:
-                #     offs_list = ti.ndrange((-1, 2), (-1, 2))
-                # else:
-                #     offs_list = ti.ndrange((-1, 2), (-1, 2),(-1, 2))
-                for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+                for offs in ti.static(ti.grouped(ti.ndrange(*((-1, 2),)*self.dim))):
                     cell_to_check = cell + offs
                     if self.is_in_grid(cell_to_check) == 1:
                         for j in range(self.grid_num_particles[cell_to_check]):
@@ -179,7 +163,8 @@ class SPHSolver:
                             if nb_i < self.max_num_neighbors and p_j != p_i and (
                                     pos_i - self.particle_positions[p_j]).norm() < self.dh * 2.00:
                                 self.particle_neighbors[p_i, nb_i] = p_j
-                                nb_i += 1
+                                #nb_i += 1
+                                nb_i.atomic_add(1)
             self.particle_num_neighbors[p_i] = nb_i
 
     @ti.func
@@ -254,10 +239,10 @@ class SPHSolver:
         for p_i in self.particle_positions:
             if self.is_fluid(p_i) == 1:
                 pos = self.particle_positions[p_i]
-                if pos[0] < self.left_bound + self.padding:
-                    self.simualte_collisions(p_i, ti.Vector([1.0, 0.0]), self.left_bound + self.padding - pos[0])
-                if pos[0] > self.right_bound - self.padding:
-                    self.simualte_collisions(p_i, ti.Vector([-1.0, 0.0]), pos[0] - self.right_bound + self.padding)
+                if pos[0] < self.left_bound + 0.5 * self.padding:
+                    self.simualte_collisions(p_i, ti.Vector([1.0, 0.0]), self.left_bound + 0.5 * self.padding - pos[0])
+                if pos[0] > self.right_bound - 0.5 * self.padding:
+                    self.simualte_collisions(p_i, ti.Vector([-1.0, 0.0]), pos[0] - self.right_bound + 0.5 * self.padding)
                 if pos[1] > self.top_bound - self.padding:
                     self.simualte_collisions(p_i, ti.Vector([0.0, -1.0]), pos[1] - self.top_bound + self.padding)
                 if pos[1] < self.bottom_bound + self.padding:
@@ -300,8 +285,8 @@ class SPHSolver:
         # Simple Forward Euler currently
         for p_i in self.particle_positions:
             if self.is_fluid(p_i) == 1:
-                self.particle_positions[p_i] += self.dt * self.particle_velocity[p_i]
                 self.particle_velocity[p_i] += self.dt * self.d_velocity[p_i]
+                self.particle_positions[p_i] += self.dt * self.particle_velocity[p_i]
             self.particle_density[p_i][0] += self.dt * self.d_density[p_i][0]
             self.particle_pressure[p_i][0] = self.p_update(self.particle_density[p_i][0], self.rho_0, self.gamma,
                                                           self.c_0)
@@ -362,11 +347,6 @@ class SPHSolver:
         self.particle_density[i] = density
         self.color[i] = color
         self.material[i] = material
-
-        # if material == self.material_sand:
-        #     self.Jp[i] = 0
-        # else:
-        #     self.Jp[i] = 1
 
     @ti.kernel
     def fill(self, new_particles: ti.i32, new_positions: ti.ext_arr(), new_material: ti.i32, color: ti.i32):
@@ -455,48 +435,66 @@ class SPHSolver:
 
 def main():
 
-    res = (800, 400)
+    res = (400, 400)
     screen_to_world_ratio = 35
 
     bg_color = 0x112f41
     particle_radius = 3.0
     particle_radius_in_world = particle_radius / screen_to_world_ratio
 
-    save_frames = False
+    save_frames = True
     gui = ti.GUI('SPH2D', res, background_color=0x112F41)
-    dx = 0.2
+    dx = 0.1
     u, b, l, r = np.array([res[1], 0, 0, res[0]]) / screen_to_world_ratio
-    sph = SPHSolver(res, screen_to_world_ratio, [u, b, l, r], alpha=0.5, dx=dx,
-                     max_steps=10000)
+    sph = SPHSolver(res, screen_to_world_ratio, [u, b, l, r], alpha=0.75, dx=dx,
+                     max_steps=50000)
 
-    sph.add_cube(lower_corner=[2*dx, 2*dx],
-                 cube_size=[2, 6],
-                 velocity=[0.0, 0.0],
+    sph.add_cube(lower_corner=[res[0]/2/screen_to_world_ratio-3, 4 * dx],
+                 cube_size=[6, 6],
+                 velocity=[0.0, -5.0],
                  density=[1000],
                  material=SPHSolver.material_fluid)
 
-    # Add boundary
+    # Add bottom boundary
     sph.add_cube(lower_corner=[0.0, 0.0],
                  cube_size=[res[0]/screen_to_world_ratio, 2*dx],
                  velocity=[0.0, 0.0],
                  density=[1000],
                  material=SPHSolver.material_bound)
+    # Add top boundary
+    # sph.add_cube(lower_corner=[0.0, res[1]/screen_to_world_ratio],
+    #              cube_size=[res[0]/screen_to_world_ratio, 2*dx],
+    #              velocity=[0.0, 0.0],
+    #              density=[1000],
+    #              material=SPHSolver.material_bound)
+    # Add left boundary
+    # sph.add_cube(lower_corner=[0.0, dx],
+    #              cube_size=[dx, res[1]/screen_to_world_ratio],
+    #              velocity=[0.0, 0.0],
+    #              density=[1000],
+    #              material=SPHSolver.material_bound)
+    # Add right boundary
+    # sph.add_cube(lower_corner=[res[0]/screen_to_world_ratio, dx],
+    #              cube_size=[dx, res[1]/screen_to_world_ratio],
+    #              velocity=[0.0, 0.0],
+    #              density=[1000],
+    #              material=SPHSolver.material_bound)
 
     colors = np.array([0xED553B, 0x068587, 0xEEEEF0, 0xFFFF00], dtype=np.uint32)
     boundary_color = 0xebaca2
 
     t = 0.0
-    frame = 1
+    frame = 0
 
     total_start = time.process_time()
-    while frame < 1000 and t < 30:
+    while frame < 50000 and t < 30:
         dt = sph.step(frame, t, total_start)
         particles = sph.particle_info()
 
-        # if frame == 200:
+        # if frame < 50 and frame % 10 == 0:
         #     sph.add_cube(lower_corner=[3, 3],
-        #                  cube_size=[1.5, 1.5],
-        #                  velocity=[0.1, -5],
+        #                  cube_size=[0.4, 0.4],
+        #                  velocity=[-5.0, 0.0],
         #                  density=[1000],
         #                  material=SPHSolver.material_fluid)
 
@@ -504,14 +502,15 @@ def main():
             for j in range(len(res)):
                 pos[j] *= screen_to_world_ratio / res[j]
 
-        gui.circles(particles['position'], radius=3.0, color=colors[particles['material']])
-        canvas = gui.canvas
-        canvas.rect(ti.vec(0, 0), ti.vec(0.0,
-               res[1]/screen_to_world_ratio)).radius(1.5).color(boundary_color).close().finish()
-        canvas.rect(ti.vec(res[0]/screen_to_world_ratio, 0), ti.vec(0.0,
-                                         res[1] / screen_to_world_ratio)).radius(1.5).color(
-            boundary_color).close().finish()
-        gui.show(f'{frame:06d}.png' if save_frames else None)
+        gui.circles(particles['position'], radius=1.5, color=colors[particles['material']])
+        # canvas = gui.canvas
+        # canvas.rect(ti.vec(0, 0), ti.vec(0.0,
+        #        res[1]/screen_to_world_ratio)).radius(1.5).color(boundary_color).close().finish()
+        # canvas.rect(ti.vec(res[0]/screen_to_world_ratio, 0), ti.vec(0.0,
+        #                                  res[1] / screen_to_world_ratio)).radius(1.5).color(
+        #     boundary_color).close().finish()
+        if frame % 50 == 0:
+            gui.show(f'{frame:06d}.png' if save_frames else None)
 
         frame += 1
         t += dt
