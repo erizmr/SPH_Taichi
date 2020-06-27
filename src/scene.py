@@ -144,7 +144,7 @@ class SPHSolver:
         nb_node.dense(ti.j,
                       self.max_num_neighbors).place(self.particle_neighbors)
 
-        self.s_f.from_numpy(np.array(1.0))
+        self.s_f.from_numpy(np.array(1.0, dtype=np.float32))
 
     @ti.func
     def compute_grid_index(self, pos):
@@ -205,7 +205,7 @@ class SPHSolver:
         # value of cubic spline smoothing kernel
         k = 10. / (7. * np.pi * h**2)
         q = r / h
-        assert q >= 0.0
+        # assert q >= 0.0
         res = ti.cast(0.0, ti.f32)
         if q <= 1.0:
             res = k * (1 - 1.5 * q**2 + 0.75 * q**3)
@@ -218,7 +218,7 @@ class SPHSolver:
         # derivative of cubcic spline smoothing kernel
         k = 10. / (7. * np.pi * h**2)
         q = r / h
-        assert q > 0.0
+        # assert q > 0.0
         res = ti.cast(0.0, ti.f32)
         if q < 1.0:
             res = (k / h) * (-3 * q + 2.25 * q**2)
@@ -405,7 +405,7 @@ class SPHSolver:
     def pci_compute_deltas(self):
         for p_i in self.particle_positions:
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0, 0.0])
+            d_v = ti.Vector([0.0, 0.0], dt=ti.f32)
 
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
@@ -421,11 +421,11 @@ class SPHSolver:
 
             # Add body force
             if self.is_fluid(p_i) == 1:
-                d_v += ti.Vector([0.0, self.g])
+                d_v += ti.Vector([0.0, self.g], dt=ti.f32)
             self.d_velocity[p_i] = d_v
             # Initialize the pressure
             self.particle_pressure[p_i][0] = 0.0
-            self.particle_pressure_acc[p_i] = ti.Vector([0.0, 0.0])
+            self.particle_pressure_acc[p_i] = ti.Vector([0.0, 0.0], dt=ti.f32)
 
     @ti.kernel
     def pci_update_time_step(self):
@@ -655,7 +655,7 @@ def main():
     dx = 0.1
     u, b, l, r = np.array([res[1], 0, 0, res[0]]) / screen_to_world_ratio
     dynamic_allocate = False
-    save_frames = True
+    save_frames = False
 
     gui = ti.GUI('SPH2D', res, background_color=0x112F41)
     sph = SPHSolver(res,

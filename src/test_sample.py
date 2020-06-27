@@ -48,8 +48,8 @@ def setup():
         # position_list: [start_x, start_y, end_x, end_y]
         start_x, start_y, end_x, end_y = position_list
         vel_x, vel_y, p, rho = 0.0, 0.0, 0.0, 1000.0
-        for pos_x in np.arange(start_x, end_x, dx):
-            for pos_y in np.arange(start_y, end_y, dx):
+        for pos_x in np.arange(start_x, end_x, dx, dtype=np.float32):
+            for pos_y in np.arange(start_y, end_y, dx, dtype=np.float32):
                 paticle_list.append([pos_x, pos_y])
                 if bound:
                     wall_mark.append(0)
@@ -192,10 +192,10 @@ class sph_solver:
         self.d_density = ti.Vector(1, dt=ti.f32)
 
         self.dx = dx
-        self.m = self.dx**2 * 1000
+        self.m = self.dx**2 * 1000.0
 
-        self.particle_list = np.array(particle_list)
-        self.wall_mark = np.array(wall_mark)
+        self.particle_list = np.array(particle_list, dtype=np.float32)
+        self.wall_mark = np.array(wall_mark, dtype=np.int32)
 
         self.grid_num_particles = ti.var(ti.i32)
         self.grid2particles = ti.var(ti.i32)
@@ -284,7 +284,7 @@ class sph_solver:
         # value of cubic spline smoothing kernel
         k = 10. / (7. * np.pi * h ** 2)
         q = r / h
-        assert q >= 0.0
+        # assert q >= 0.0
         res = ti.cast(0.0, ti.f32)
         if q <= 1.0:
             res = k * (1 - 1.5 * q ** 2 + 0.75 * q ** 3)
@@ -297,10 +297,10 @@ class sph_solver:
         # derivative of cubcic spline smoothing kernel
         k = 10. / (7. * np.pi * h ** 2)
         q = r / h
-        assert q > 0.0
+        # assert q > 0.0
         res = ti.cast(0.0, ti.f32)
         if q < 1.0:
-            res =  (k / h) * (-3 * q + 2.25 * q ** 2)
+            res = (k / h) * (-3 * q + 2.25 * q ** 2)
         elif q < 2.0:
             res = -0.75 * (k / h) * (2 - q) ** 2
         return res
@@ -309,7 +309,8 @@ class sph_solver:
     def rhoDerivative(self, ptc_i, ptc_j, r, r_mod):
         # density delta
         return self.m * self.cubicKernelDerivative(r_mod, self.dh) \
-               * (self.particle_velocity[ptc_i]- self.particle_velocity[ptc_j]).dot(r / r_mod)
+               * (self.particle_velocity[ptc_i] - self.particle_velocity[ptc_j]).dot(r / r_mod)
+
 
     @ti.func
     def pUpdate(self, rho, rho_0=1000, gamma=7.0, c_0=20.0):
@@ -368,8 +369,8 @@ class sph_solver:
     def computeDeltas(self):
         for p_i in self.particle_positions:
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0, 0.0])
-            d_rho = 0.0
+            d_v = ti.Vector([0.0, 0.0], dt=ti.f32)
+            d_rho = ti.cast(0.0, ti.f32)
             # if self.isFluid(p_i) == 1:
             #     d_v = ti.Vector([0.0, -9.8])
             for j in range(self.particle_num_neighbors[p_i]):
@@ -397,7 +398,7 @@ class sph_solver:
 
             # Add body force
             if self.isFluid(p_i) == 1:
-                d_v += ti.Vector([0.0, self.g])
+                d_v += ti.Vector([0.0, self.g], dt=ti.f32)
             self.d_velocity[p_i] = d_v
             self.d_density[p_i][0] = d_rho
 
@@ -499,7 +500,7 @@ def main():
     OUTPUT = False
     gui = ti.GUI('SPH2D', screen_res)
     grid_shape = makeGrid()
-    particle_list,wall_mark, u, b, l, r = setup()
+    particle_list, wall_mark, u, b, l, r = setup()
     sph = sph_solver(particle_list, wall_mark, grid_shape, [u,b,l,r],alpha=1.0, dx = dx, gui=gui, max_steps=10000)
     sph.init(sph.particle_list, sph.wall_mark)
     sph.solve(output=OUTPUT)
