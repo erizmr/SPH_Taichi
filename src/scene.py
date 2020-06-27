@@ -59,6 +59,8 @@ class SPHSolver:
         self.s_f = ti.var(ti.i32, shape=())
         # Max iteration steps for pressure correction
         self.sub_max_iteration = 3
+        self.rho_err = ti.Vector(1, dt=ti.f32, shape=())
+        self.max_rho_err = ti.Vector(1, dt=ti.f32, shape=())
 
         # Compute dt, a naive initial test value
         self.dt = 0.1 * self.dh / self.c_0
@@ -323,23 +325,21 @@ class SPHSolver:
 
     @ti.kernel
     def scaling_factor(self):
-        grad_sum = ti.Vector([0.0, 0.0])
+        grad_sum = 0.0
         grad_dot_sum = 0.0
-        range_num = ti.cast(self.dh * 2.0 * 2.0 / self.dx, ti.i32)
+        range_num = ti.cast(self.dh * 2.0 / self.dx, ti.i32)
         half_range = ti.cast(0.5 * range_num, ti.i32)
         for x in range(-half_range, half_range):
             for y in range(-half_range, half_range):
-                r = ti.Vector([x * self.dx, y * self.dx])
+                r = ti.Vector([-x * self.dx, -y * self.dx])
                 r_mod = r.norm()
-                if r_mod < 2.0 * self.dh:
-                    grad = self.cubic_kernel_derivative(r_mod,
-                                                        self.dh) * r / r_mod
+                if r_mod < 2.0 * self.dh and r_mod > 1e-5:
+                    grad = self.cubic_kernel_derivative(r_mod, self.dh)
                     grad_sum += grad
-                    grad_dot_sum += grad.dot(grad)
-        print(grad_sum, grad_dot_sum)
-        beta = 2 * (self.dt * self.m / self.rho_0)**2
-        self.s_f[None] = -1.0 / (beta *
-                                 (-grad_sum.dot(grad_sum) - grad_dot_sum))
+                    grad_dot_sum += grad * grad
+
+        beta = 2 * (500 * self.dt * self.m / self.rho_0)**2
+        self.s_f[None] = -1.0 / (beta * (-grad_sum * grad_sum - grad_dot_sum))
 
     @ti.kernel
     def pci_update_pressure(self):
@@ -351,6 +351,7 @@ class SPHSolver:
                 self.particle_positions_new[p_i] = self.particle_positions[
                     p_i] + self.dt * self.particle_velocity_new[p_i]
 
+        self.max_rho_err[None][0] = 0.0
         for p_i in self.particle_positions_new:
             pos_i = self.particle_positions_new[p_i]
             d_rho = 0.0
@@ -363,12 +364,18 @@ class SPHSolver:
                 r_mod = r.norm()
 
                 # Compute Density change
-                d_rho += self.m * self.cubic_kernel(r_mod, self.dh)
-            #print('d_rho', d_rho)
-            self.particle_density[p_i][0] = d_rho
-            rho_err = self.particle_density[p_i][0] - self.rho_0
-            #print(rho_err)
-            self.particle_pressure[p_i][0] += self.s_f[None] * rho_err
+                d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
+               * (self.particle_velocity_new[p_i] - self.particle_velocity_new[p_j]).dot(r / r_mod)
+
+            self.particle_density[p_i][0] += self.dt * d_rho
+            self.rho_err[None][0] = self.particle_density[p_i][0] - self.rho_0
+            self.max_rho_err[None][0] = max(self.rho_err[None][0],
+                                            self.max_rho_err[None][0])
+            if p_i == 5:
+                print('rho_err', self.rho_err[None][0])
+
+            self.particle_pressure[p_i][
+                0] += self.s_f[None] * self.rho_err[None][0]
 
         for p_i in self.particle_positions_new:
             pos_i = self.particle_positions_new[p_i]
@@ -483,9 +490,14 @@ class SPHSolver:
             # Compute deltas
             self.pci_compute_deltas()
             self.scaling_factor()
-            print('???', self.s_f[None])
-            for i in range(self.sub_max_iteration):
+            #print('???', self.s_f[None])
+
+            self.pci_update_pressure()
+            it = 0
+            while self.max_rho_err[None][0] >= 10.0 or it <= 3:
                 self.pci_update_pressure()
+                it += 1
+            print('?', self.max_rho_err[None][0])
             # timestep Update
             self.pci_update_time_step()
 
