@@ -477,11 +477,19 @@ class SPHSolver:
 
     def adaptive_step(self):
         self.max_v = np.max(
-            np.linalg.norm(self.particle_velocity.to_numpy(), 2, axis=1))
+            np.linalg.norm(self.particle_velocity.to_numpy()
+                           [:int(self.particle_num.to_numpy())],
+                           2,
+                           axis=1))
         self.max_a = np.max(
-            np.linalg.norm(self.d_velocity.to_numpy(), 2, axis=1))
-        self.max_rho = np.max(self.particle_density.to_numpy())
-        self.max_pressure = np.max(self.particle_pressure.to_numpy())
+            np.linalg.norm(
+                self.d_velocity.to_numpy()[:int(self.particle_num.to_numpy())],
+                2,
+                axis=1))
+        self.max_rho = np.max(self.particle_density.to_numpy()
+                              [:int(self.particle_num.to_numpy())])
+        self.max_pressure = np.max(self.particle_pressure.to_numpy()
+                                   [:int(self.particle_num.to_numpy())])
 
         # CFL analysis, adaptive dt
         dt_cfl = self.dh / self.max_v
@@ -654,7 +662,7 @@ def main():
     screen_to_world_ratio = 35
     dx = 0.1
     u, b, l, r = np.array([res[1], 0, 0, res[0]]) / screen_to_world_ratio
-    dynamic_allocate = False
+    dynamic_allocate = True
     save_frames = False
 
     gui = ti.GUI('SPH2D', res, background_color=0x112F41)
