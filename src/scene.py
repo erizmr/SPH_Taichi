@@ -476,20 +476,16 @@ class SPHSolver:
         print("Adaptive time step: ", self.dt)
 
     def adaptive_step(self):
+        total_num = self.particle_num[None]
         self.max_v = np.max(
-            np.linalg.norm(self.particle_velocity.to_numpy()
-                           [:int(self.particle_num.to_numpy())],
+            np.linalg.norm(self.particle_velocity.to_numpy()[:total_num],
                            2,
                            axis=1))
         self.max_a = np.max(
-            np.linalg.norm(
-                self.d_velocity.to_numpy()[:int(self.particle_num.to_numpy())],
-                2,
-                axis=1))
-        self.max_rho = np.max(self.particle_density.to_numpy()
-                              [:int(self.particle_num.to_numpy())])
-        self.max_pressure = np.max(self.particle_pressure.to_numpy()
-                                   [:int(self.particle_num.to_numpy())])
+            np.linalg.norm(self.d_velocity.to_numpy()[:total_num], 2, axis=1))
+        self.max_rho = np.max(self.particle_density.to_numpy()[:total_num])
+        self.max_pressure = np.max(
+            self.particle_pressure.to_numpy()[:total_num])
 
         # CFL analysis, adaptive dt
         dt_cfl = self.dh / self.max_v
