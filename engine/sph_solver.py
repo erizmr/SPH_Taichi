@@ -29,53 +29,33 @@ class SPHSolver:
                  max_time=5.0,
                  max_steps=50000,
                  dynamic_allocate=False,
+                 adaptive_time_step=True,
                  method=0):
         self.method = method
+        self.adaptive_time_step = adaptive_time_step
         self.dim = len(res)
         self.res = res
         self.screen_to_world_ratio = screen_to_world_ratio
         self.dynamic_allocate = dynamic_allocate
         # self.padding = padding  / screen_to_world_ratio
         self.padding = 2 * dx
-        # Solver parameters
         self.max_time = max_time
         self.max_steps = max_steps
+        self.max_num_particles = max_num_particles
 
         self.g = -9.80  # Gravity
         self.alpha = alpha  # viscosity
         self.rho_0 = 1000.0  # reference density
-        self.CFL_v = 0.40  # CFL coefficient for velocity
+        self.CFL_v = 0.30  # CFL coefficient for velocity
         self.CFL_a = 0.05  # CFL coefficient for acceleration
 
         self.df_fac = 1.3
-        self.dx = dx
-        self.dh = self.dx * self.df_fac
-
-        # Pressure state function parameters(WCSPH)
-        self.gamma = 7.0
-        self.c_0 = 100.0
-
-        # Scaling factor for PCISPH
-        self.s_f = ti.var(ti.f32, shape=())
-        # Max iteration steps for pressure correction
-        self.it = 0
-        self.sub_max_iteration = 3
-        self.rho_err = ti.Vector(1, dt=ti.f32, shape=())
-        self.max_rho_err = ti.Vector(1, dt=ti.f32, shape=())
-
-        # Summing up the rho for all particles to compute the average rho
-        self.sum_rho_err = ti.var(ti.f32, shape=())
-        self.sum_drho = ti.var(ti.f32, shape=())
-
-        # Compute dt, a naive initial test value, especially for WCSPH
-        self.dt_default = 0.1 * self.dh / self.c_0
+        self.dx = dx  # Particle radius
+        self.dh = self.dx * self.df_fac  # Smooth length
+        # Declare dt as ti var for adaptive time step
         self.dt = ti.var(ti.f32, shape=())
-        if method == SPHSolver.method_DFSPH:
-            self.dt_default = 0.5 * self.dh / self.c_0
-
         # Particle parameters
         self.m = self.dx**self.dim * self.rho_0
-        self.max_num_particles = max_num_particles
 
         self.grid_size = 2 * self.dh
         self.grid_pos = np.ceil(
@@ -86,6 +66,26 @@ class SPHSolver:
         self.bottom_bound = bound[1]  # bottom_bound
         self.left_bound = bound[2]  # left_bound
         self.right_bound = bound[3]  # right_bound
+
+        # ----------- WCSPH parameters-----------------
+        # Pressure state function parameters(WCSPH)
+        self.gamma = 7.0
+        self.c_0 = 100.0
+
+        # ----------- PCISPH parameters-----------------
+        # Scaling factor for PCISPH
+        self.s_f = ti.var(ti.f32, shape=())
+        # Max iteration steps for pressure correction
+        self.it = 0
+        self.max_it = 0
+        self.sub_max_iteration = 3
+        self.rho_err = ti.Vector(1, dt=ti.f32, shape=())
+        self.max_rho_err = ti.Vector(1, dt=ti.f32, shape=())
+
+        # ----------- DFSPH parameters-----------------
+        # Summing up the rho for all particles to compute the average rho
+        self.sum_rho_err = ti.var(ti.f32, shape=())
+        self.sum_drho = ti.var(ti.f32, shape=())
 
         # Dynamic Fill particles use
         self.source_bound = ti.Vector(self.dim, dt=ti.f32, shape=2)
@@ -138,7 +138,7 @@ class SPHSolver:
                 self.particle_alpha, self.particle_stiff)
         else:
             # Allocate enough memory
-            ti.root.dense(ti.i, 3660).place(
+            ti.root.dense(ti.i, 2**18).place(
                 self.particle_positions, self.particle_velocity,
                 self.particle_pressure, self.particle_density,
                 self.particle_density_new, self.d_velocity, self.d_density,
@@ -162,10 +162,21 @@ class SPHSolver:
         nb_node.dense(ti.j,
                       self.max_num_neighbors).place(self.particle_neighbors)
 
-        self.s_f.from_numpy(np.array(1.0, dtype=np.float32))
-        # self.dt.from_numpy(np.array(0.1 * self.dh / self.c_0,
-        #                             dtype=np.float32))
-        self.dt.from_numpy(np.array(0.0015, dtype=np.float32))
+        # Initialize dt
+        if method == SPHSolver.method_WCSPH:
+            self.dt.from_numpy(
+                np.array(0.1 * self.dh / self.c_0, dtype=np.float32))
+
+        if method == SPHSolver.method_PCISPH:
+            self.s_f.from_numpy(np.array(1.0, dtype=np.float32))
+            if self.adaptive_time_step:
+                self.dt.from_numpy(np.array(0.0015, dtype=np.float32))
+            else:
+                self.dt.from_numpy(np.array(0.00015, dtype=np.float32))
+
+        if method == SPHSolver.method_DFSPH:
+            self.dt.from_numpy(
+                np.array(0.5 * self.dh / self.c_0, dtype=np.float32))
 
     @ti.func
     def compute_grid_index(self, pos):
@@ -176,7 +187,7 @@ class SPHSolver:
         # Ref to pbf2d example from by Ye Kuang (k-ye)
         # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
         # allocate particles to grid
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             # Compute the grid index
             cell = self.compute_grid_index(self.particle_positions[p_i])
             offs = self.grid_num_particles[cell].atomic_add(1)
@@ -198,7 +209,7 @@ class SPHSolver:
     def search_neighbors(self):
         # Ref to pbf2d example from by Ye Kuang (k-ye)
         # https://github.com/taichi-dev/taichi/blob/master/examples/pbf2d.py
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             nb_i = 0
             if self.is_fluid(p_i) == 1 or self.is_fluid(p_i) == 0:
@@ -294,7 +305,7 @@ class SPHSolver:
     @ti.kernel
     def enforce_boundary(self):
         # TODO: only handle 2D case currently
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 pos = self.particle_positions[p_i]
                 if pos[0] < self.left_bound + 0.5 * self.padding:
@@ -316,12 +327,10 @@ class SPHSolver:
 
     @ti.kernel
     def wc_compute_deltas(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0, 0.0])
+            d_v = ti.Vector([0.0 for _ in range(self.dim)])
             d_rho = 0.0
-            # if self.is_fluid(p_i) == 1:
-            #     d_v = ti.Vector([0.0, -9.8])
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
                 pos_j = self.particle_positions[p_j]
@@ -342,14 +351,16 @@ class SPHSolver:
 
             # Add body force
             if self.is_fluid(p_i) == 1:
-                d_v += ti.Vector([0.0, self.g])
+                val = [0.0 for _ in range(self.dim - 1)]
+                val.extend([self.g])
+                d_v += ti.Vector(val, dt=ti.f32)
             self.d_velocity[p_i] = d_v
             self.d_density[p_i][0] = d_rho
 
     @ti.kernel
     def wc_update_time_step(self):
         # Simple Forward Euler currently
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 self.particle_velocity[p_i] += self.dt * self.d_velocity[p_i]
                 self.particle_positions[
@@ -365,6 +376,7 @@ class SPHSolver:
         grad_dot_sum = 0.0
         range_num = ti.cast(self.dh * 2.0 / self.dx, ti.i32)
         half_range = ti.cast(0.5 * range_num, ti.i32)
+        # TODO: only handle 2D case currently
         for x in range(-half_range, half_range):
             for y in range(-half_range, half_range):
                 r = ti.Vector([-x * self.dx, -y * self.dx])
@@ -381,7 +393,7 @@ class SPHSolver:
 
     @ti.kernel
     def pci_pos_vel_prediction(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 self.particle_velocity_new[
                     p_i] = self.particle_velocity[p_i] + self.dt * (
@@ -393,7 +405,7 @@ class SPHSolver:
 
     @ti.kernel
     def pci_update_pressure(self):
-        for p_i in self.particle_positions_new:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions_new[p_i]
             d_rho = 0.0
             curr_rho = 0.0
@@ -420,7 +432,7 @@ class SPHSolver:
 
     @ti.kernel
     def pci_update_pressure_force(self):
-        for p_i in self.particle_positions_new:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions_new[p_i]
             d_vp = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
             for j in range(self.particle_num_neighbors[p_i]):
@@ -441,7 +453,7 @@ class SPHSolver:
 
     @ti.kernel
     def pci_compute_deltas(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
 
@@ -471,7 +483,7 @@ class SPHSolver:
     @ti.kernel
     def pci_update_time_step(self):
         # Final position and velocity update
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 self.particle_velocity[p_i] += self.dt * (
                     self.d_velocity[p_i] + self.particle_pressure_acc[p_i])
@@ -482,7 +494,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_compute_deltas(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
             for j in range(self.particle_num_neighbors[p_i]):
@@ -506,14 +518,14 @@ class SPHSolver:
 
     @ti.kernel
     def df_predict_velocities(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 self.particle_velocity_new[p_i] = self.particle_velocity[
                     p_i] + self.dt * self.d_velocity[p_i]
 
     @ti.kernel
     def df_correct_density_predict(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             d_rho = 0.0
             for j in range(self.particle_num_neighbors[p_i]):
@@ -545,7 +557,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_correct_density_adapt_vel(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
             for j in range(self.particle_num_neighbors[p_i]):
@@ -570,7 +582,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_update_positions(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             # Update the positions
             if self.is_fluid(p_i) == 1:
                 self.particle_positions[
@@ -578,7 +590,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_compute_density_alpha(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             grad_sum = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
             grad_square_sum = 0.0
@@ -607,7 +619,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_correct_divergence_compute_drho(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             d_rho = 0.0
             for j in range(self.particle_num_neighbors[p_i]):
@@ -644,7 +656,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_correct_divergence_adapt_vel(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
 
@@ -670,7 +682,7 @@ class SPHSolver:
 
     @ti.kernel
     def df_update_velocities(self):
-        for p_i in self.particle_positions:
+        for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 # Update the velocities from prediction values to next step
                 self.particle_velocity[p_i] = self.particle_velocity_new[p_i]
@@ -696,8 +708,7 @@ class SPHSolver:
             % (self.max_v, self.max_a, self.max_rho, self.max_pressure))
         if self.method == SPHSolver.methods['PCISPH']:
             print("Max iter: %d, Max density variation: %s" %
-                  (self.it, self.max_rho_err[None][0]))
-
+                  (self.max_it, self.max_rho_err[None][0]))
         if self.method == SPHSolver.methods['DFSPH']:
             print("Max iter: %d, Max density variation: %s" %
                   (self.it, self.sum_rho_err[None] / self.particle_num[None]))
@@ -711,28 +722,31 @@ class SPHSolver:
             np.linalg.norm(self.particle_velocity.to_numpy()[:total_num],
                            2,
                            axis=1))
-        # CFL analysis, adaptive dt
+        # CFL analysis, constrained by v_max
         dt_cfl = self.CFL_v * self.dh / self.max_v
 
-        if self.method != SPHSolver.method_DFSPH:
-            self.max_a = np.max(
-                np.linalg.norm(
-                    (self.d_velocity.to_numpy() +
-                     self.particle_pressure_acc.to_numpy())[:total_num],
-                    2,
-                    axis=1))
-            self.max_rho = np.max(self.particle_density.to_numpy()[:total_num])
-            self.max_pressure = np.max(
-                self.particle_pressure.to_numpy()[:total_num])
-            dt_f = self.CFL_a * np.sqrt(self.dh / self.max_a)
-            dt_a = self.dh / (self.c_0 * np.sqrt(
-                (self.max_rho / self.rho_0)**self.gamma))
-            if self.method == SPHSolver.method_WCSPH:
-                self.dt[None] = np.min([dt_cfl, dt_f, dt_a])
-            if self.method == SPHSolver.method_PCISPH:
-                self.dt[None] = np.min([dt_cfl, dt_f])
-        else:
-            self.dt[None] = self.CFL * dt_cfl
+        self.max_a = np.max(
+            np.linalg.norm((self.d_velocity.to_numpy() +
+                            self.particle_pressure_acc.to_numpy())[:total_num],
+                           2,
+                           axis=1))
+        # Constrained by a_max
+        dt_f = self.CFL_a * np.sqrt(self.dh / self.max_a)
+
+        if self.adaptive_time_step and self.method == SPHSolver.method_DFSPH:
+            self.dt[None] = np.min([dt_cfl, dt_f])
+            return
+
+        self.max_rho = np.max(self.particle_density.to_numpy()[:total_num])
+        self.max_pressure = np.max(
+            self.particle_pressure.to_numpy()[:total_num])
+        dt_a = self.dh / (self.c_0 * np.sqrt(
+            (self.max_rho / self.rho_0)**self.gamma))
+
+        if self.adaptive_time_step and self.method == SPHSolver.method_WCSPH:
+            self.dt[None] = np.min([dt_cfl, dt_f, dt_a])
+        if self.adaptive_time_step and self.method == SPHSolver.method_PCISPH:
+            self.dt[None] = np.min([dt_cfl, dt_f])
 
     def step(self, frame, t, total_start):
         curr_start = time.process_time()
@@ -754,10 +768,14 @@ class SPHSolver:
             self.pci_scaling_factor()
             # Start density prediction-correction iteration process
             self.it = 0
+            self.max_it = 0
+            # 1% rho_0
             while self.max_rho_err[None][
                     0] >= 0.01 * self.rho_0 or self.it < self.sub_max_iteration:
                 self.pci_pc_iteration()
                 self.it += 1
+                self.max_it += 1
+                self.max_it = max(self.it, self.max_it)
                 if self.it > 1000:
                     print(
                         "Warning: PCISPH density does not converge, iterated %d steps"
@@ -772,6 +790,7 @@ class SPHSolver:
             # Correct divergence error
             self.it = 0
             self.sum_drho[None] = 0.0
+            # 0.1% rho_0
             while self.sum_drho[None] >= 0.001 * self.particle_num[
                     None] * self.rho_0 or self.it < 1:
                 self.sum_drho[None] = 0.0
@@ -794,11 +813,10 @@ class SPHSolver:
             # Correct density error
             self.it = 0
             self.sum_rho_err[None] = 0.0
-            # self.sum_rho_err.from_numpy(np.array(0.0, dtype=np.float))
+            # 0.1% rho_0
             while self.sum_rho_err[None] >= 0.001 * self.particle_num[
                     None] * self.rho_0 or self.it < 2:
                 self.sum_rho_err[None] = 0.0
-                # self.sum_rho_err.from_numpy(np.array(0.0, dtype=np.float))
                 self.df_correct_density_predict()
                 self.df_correct_density_adapt_vel()
                 self.it += 1
@@ -916,13 +934,13 @@ class SPHSolver:
 
     @ti.kernel
     def copy_dynamic_nd(self, np_x: ti.ext_arr(), input_x: ti.template()):
-        for i in self.particle_positions:
+        for i in range(self.particle_num[None]):
             for j in ti.static(range(self.dim)):
                 np_x[i, j] = input_x[i][j]
 
     @ti.kernel
     def copy_dynamic(self, np_x: ti.ext_arr(), input_x: ti.template()):
-        for i in self.particle_positions:
+        for i in range(self.particle_num[None]):
             np_x[i] = input_x[i]
 
     def particle_info(self):

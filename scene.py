@@ -8,11 +8,15 @@ ti.init(arch=ti.cpu)
 
 
 def main():
-    dynamic_allocate = True
+    dynamic_allocate = False
     save_frames = True
+    adaptive_time_step = True
     # method_name = 'WCSPH'
     method_name = 'PCISPH'
     # method_name = 'DFSPH'
+
+    sim_physical_time = 5.0
+    max_frame = 50000
 
     res = (400, 400)
     screen_to_world_ratio = 35
@@ -24,9 +28,10 @@ def main():
                     screen_to_world_ratio, [u, b, l, r],
                     alpha=0.30,
                     dx=dx,
-                    max_time=5.0,
-                    max_steps=50000,
+                    max_time=sim_physical_time,
+                    max_steps=max_frame,
                     dynamic_allocate=dynamic_allocate,
+                    adaptive_time_step=adaptive_time_step,
                     method=SPHSolver.methods[method_name])
 
     print("Method use: %s" % method_name)
@@ -48,14 +53,17 @@ def main():
     colors = np.array([0xED553B, 0x068587, 0xEEEEF0, 0xFFFF00],
                       dtype=np.uint32)
 
+    save_cnt = 0.0
+    output_fps = 60
+    save_point = 1.0 / output_fps
     t = 0.0
     frame = 0
     total_start = time.process_time()
-    while frame < 50000 and t < 30:
+    while frame < max_frame and t < sim_physical_time:
         dt = sph.step(frame, t, total_start)
         particles = sph.particle_info()
 
-        if dynamic_allocate and frame == 1000:
+        if frame == 1000:
             sph.add_cube(lower_corner=[6, 6],
                          cube_size=[2.0, 2.0],
                          velocity=[0.0, -5.0],
@@ -63,7 +71,7 @@ def main():
                          color=0xED553B,
                          material=SPHSolver.material_fluid)
 
-        if dynamic_allocate and frame == 1000:
+        if frame == 1000:
             sph.add_cube(lower_corner=[3, 8],
                          cube_size=[1.0, 1.0],
                          velocity=[0.0, -10.0],
@@ -78,11 +86,19 @@ def main():
         gui.circles(particles['position'],
                     radius=1.5,
                     color=particles['color'])
-        if frame % 50 == 0:
+
+        # Save in fixed frame interval, for fixed time step
+        if not adaptive_time_step and frame % 50 == 0:
             gui.show(f'{frame:06d}.png' if save_frames else None)
+
+        # Save in fixed frame per second, for adaptive time step
+        if adaptive_time_step and save_cnt >= save_point:
+            gui.show(f'{frame:06d}.png' if save_frames else None)
+            save_cnt = 0.0
 
         frame += 1
         t += dt
+        save_cnt += dt
 
     print('done')
 
