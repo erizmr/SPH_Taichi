@@ -538,15 +538,15 @@ class SPHSolver:
 
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = r.norm()
-                if r_mod > 1e-4:
-                    # Compute Density change
-                    if self.is_fluid(p_j) == 1:
-                        d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
-                                 * (self.particle_velocity_new[p_i] - self.particle_velocity_new[p_j]).dot(r / r_mod)
-                    elif self.is_fluid(p_j) == 0:
-                        d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
-                                 * self.particle_velocity_new[p_i].dot(r / r_mod)
+                r_mod = ti.max(r.norm(), 1e-5)
+
+                # Compute Density change
+                if self.is_fluid(p_j) == 1:
+                    d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
+                             * (self.particle_velocity_new[p_i] - self.particle_velocity_new[p_j]).dot(r / r_mod)
+                elif self.is_fluid(p_j) == 0:
+                    d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
+                             * self.particle_velocity_new[p_i].dot(r / r_mod)
 
             # Compute the predicted density rho star
             self.particle_density_new[p_i][

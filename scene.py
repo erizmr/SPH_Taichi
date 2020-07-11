@@ -13,8 +13,8 @@ def main():
     save_frames = True
     adaptive_time_step = True
     # method_name = 'WCSPH'
-    # method_name = 'PCISPH'
-    method_name = 'DFSPH'
+    method_name = 'PCISPH'
+    # method_name = 'DFSPH'
 
     sim_physical_time = 5.0
     max_frame = 50000
