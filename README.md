@@ -5,23 +5,19 @@ A [Taichi](https://github.com/taichi-dev/taichi) implementation of Smooth Partic
 Currently, the following features have been implemented:
 - Weakly Compressible SPH (WCSPH)[1]
 - Predictive-Corrective Incompressible SPH (PCISPH)[2]
+- Divergence free SPH (DFSPH)[3]
 
 ## Example
-- Demo1 (WCSPH, 1k particles)
 
-run ```python test_sample.py```
-<p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/sph_hv.gif" width="50%" height="50%" />
-</p>
-
-- Demo2 (WCSPH, 4k particles)
+- Demo (PCISPH, 4.5k particles)
 
 Run ```python scene.py```
 <p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/wcsph_alpha030.gif" width="50%" height="50%" />
+  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/PCISPH.gif" width="50%" height="50%" />
 </p>
 
 ## Reference
 1. M. Becker and M. Teschner (2007). "Weakly compressible SPH for free surface flows". In:Proceedings of the 2007 ACM SIGGRAPH/Eurographics symposium on Computer animation. Eurographics Association, pp. 209–217.
 2. B. Solenthaler and R. Pajarola (2009). “Predictive-corrective incompressible SPH”. In: ACM SIGGRAPH 2009 papers, pp. 1–6.
+3. J. Bender, D. Koschier (2015) Divergence-free smoothed particle hydrodynamics[C]//Proceedings of the 14th ACM SIGGRAPH/Eurographics symposium on computer animation. ACM, 2015: 147-155.
  
