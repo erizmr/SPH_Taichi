@@ -16,6 +16,8 @@ Run ```python scene.py```
   <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/PCISPH.gif" width="50%" height="50%" />
 </p>
 
+Demos for the other two methods: ```python scene.py --method WCSPH``` or ```python scene.py --method DFSPH```
+
 ## Reference
 1. M. Becker and M. Teschner (2007). "Weakly compressible SPH for free surface flows". In:Proceedings of the 2007 ACM SIGGRAPH/Eurographics symposium on Computer animation. Eurographics Association, pp. 209–217.
 2. B. Solenthaler and R. Pajarola (2009). “Predictive-corrective incompressible SPH”. In: ACM SIGGRAPH 2009 papers, pp. 1–6.
