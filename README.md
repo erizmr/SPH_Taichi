@@ -7,6 +7,7 @@ Currently, the following features have been implemented:
 - Predictive-Corrective Incompressible SPH (PCISPH)[2]
 - Divergence free SPH (DFSPH)[3]
 
+Taichi Version: ```0.6.10```
 ## Example
 
 - Demo (PCISPH, 4.5k particles)
