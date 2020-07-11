@@ -1,6 +1,7 @@
 # SPH taichi implementation by mzhang
 import taichi as ti
 from engine.sph_solver import *
+import argparse
 
 # Default run on CPU
 # cuda performance has not been tested
@@ -12,8 +13,8 @@ def main():
     save_frames = True
     adaptive_time_step = True
     # method_name = 'WCSPH'
-    method_name = 'PCISPH'
-    # method_name = 'DFSPH'
+    # method_name = 'PCISPH'
+    method_name = 'DFSPH'
 
     sim_physical_time = 5.0
     max_frame = 50000
@@ -43,16 +44,10 @@ def main():
                  color=0x068587,
                  material=SPHSolver.material_fluid)
 
-    # Add bottom boundary
-    # sph.add_cube(lower_corner=[0.0, 0.0],
-    #              cube_size=[res[0] / screen_to_world_ratio, 2 * dx],
-    #              velocity=[0.0, 0.0],
-    #              density=[1000],
-    #              material=SPHSolver.material_bound)
-
     colors = np.array([0xED553B, 0x068587, 0xEEEEF0, 0xFFFF00],
                       dtype=np.uint32)
-
+    add_cnt = 0.0
+    add = True
     save_cnt = 0.0
     output_fps = 60
     save_point = 1.0 / output_fps
@@ -63,21 +58,24 @@ def main():
         dt = sph.step(frame, t, total_start)
         particles = sph.particle_info()
 
-        if frame == 1000:
+        # if frame == 1000:
+        if add and add_cnt > 0.40:
             sph.add_cube(lower_corner=[6, 6],
                          cube_size=[2.0, 2.0],
                          velocity=[0.0, -5.0],
-                         density=[1000],
+                         density=[1000.0],
                          color=0xED553B,
                          material=SPHSolver.material_fluid)
 
-        if frame == 1000:
+        # if frame == 1000:
+        if add and add_cnt > 0.40:
             sph.add_cube(lower_corner=[3, 8],
                          cube_size=[1.0, 1.0],
                          velocity=[0.0, -10.0],
-                         density=[1000],
+                         density=[1000.0],
                          color=0xEEEEF0,
                          material=SPHSolver.material_fluid)
+            add = False
 
         for pos in particles['position']:
             for j in range(len(res)):
@@ -99,9 +97,16 @@ def main():
         frame += 1
         t += dt
         save_cnt += dt
+        add_cnt += dt
 
     print('done')
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--method",
+                        type=str,
+                        default="PCISPH",
+                        help="SPH methods: WCSPH, PCISPH, DFSPH")
+    opt = parser.parse_args()
     main()

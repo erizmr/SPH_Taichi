@@ -46,7 +46,7 @@ class SPHSolver:
         self.g = -9.80  # Gravity
         self.alpha = alpha  # viscosity
         self.rho_0 = 1000.0  # reference density
-        self.CFL_v = 0.30  # CFL coefficient for velocity
+        self.CFL_v = 0.25  # CFL coefficient for velocity
         self.CFL_a = 0.05  # CFL coefficient for acceleration
 
         self.df_fac = 1.3
@@ -70,7 +70,7 @@ class SPHSolver:
         # ----------- WCSPH parameters-----------------
         # Pressure state function parameters(WCSPH)
         self.gamma = 7.0
-        self.c_0 = 100.0
+        self.c_0 = 200.0
 
         # ----------- PCISPH parameters-----------------
         # Scaling factor for PCISPH
@@ -166,6 +166,8 @@ class SPHSolver:
         if method == SPHSolver.method_WCSPH:
             self.dt.from_numpy(
                 np.array(0.1 * self.dh / self.c_0, dtype=np.float32))
+            self.CFL_v = 0.20  # CFL coefficient for velocity
+            self.CFL_a = 0.20  # CFL coefficient for acceleration
 
         if method == SPHSolver.method_PCISPH:
             self.s_f.from_numpy(np.array(1.0, dtype=np.float32))
@@ -176,7 +178,9 @@ class SPHSolver:
 
         if method == SPHSolver.method_DFSPH:
             self.dt.from_numpy(
-                np.array(0.5 * self.dh / self.c_0, dtype=np.float32))
+                np.array(1.0 * self.dh / self.c_0, dtype=np.float32))
+            self.CFL_v = 0.30  # CFL coefficient for velocity
+            self.CFL_a = 0.05  # CFL coefficient for acceleration
 
     @ti.func
     def compute_grid_index(self, pos):
@@ -292,7 +296,7 @@ class SPHSolver:
         return res
 
     @ti.func
-    def simualte_collisions(self, ptc_i, vec, d):
+    def simulate_collisions(self, ptc_i, vec, d):
         # Collision factor, assume roughly (1-c_f)*velocity loss after collision
         c_f = 0.3
         self.particle_positions[ptc_i] += vec * d
@@ -309,19 +313,19 @@ class SPHSolver:
             if self.is_fluid(p_i) == 1:
                 pos = self.particle_positions[p_i]
                 if pos[0] < self.left_bound + 0.5 * self.padding:
-                    self.simualte_collisions(
+                    self.simulate_collisions(
                         p_i, ti.Vector([1.0, 0.0], dt=ti.f32),
                         self.left_bound + 0.5 * self.padding - pos[0])
                 if pos[0] > self.right_bound - 0.5 * self.padding:
-                    self.simualte_collisions(
+                    self.simulate_collisions(
                         p_i, ti.Vector([-1.0, 0.0], dt=ti.f32),
                         pos[0] - self.right_bound + 0.5 * self.padding)
                 if pos[1] > self.top_bound - self.padding:
-                    self.simualte_collisions(
+                    self.simulate_collisions(
                         p_i, ti.Vector([0.0, -1.0], dt=ti.f32),
                         pos[1] - self.top_bound + self.padding)
                 if pos[1] < self.bottom_bound + self.padding:
-                    self.simualte_collisions(
+                    self.simulate_collisions(
                         p_i, ti.Vector([0.0, 1.0], dt=ti.f32),
                         self.bottom_bound + self.padding - pos[1])
 
@@ -337,7 +341,7 @@ class SPHSolver:
 
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-6)
+                r_mod = ti.max(r.norm(), 1e-5)
 
                 # Compute Density change
                 d_rho += self.rho_derivative(p_i, p_j, r, r_mod)
@@ -503,9 +507,9 @@ class SPHSolver:
 
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-5)
+                r_mod = r.norm()
 
-                if self.is_fluid(p_i) == 1:
+                if r_mod > 1e-4 and self.is_fluid(p_i) == 1:
                     # Compute Viscosity force contribution
                     d_v += self.viscosity_force(p_i, p_j, r, r_mod)
 
@@ -534,21 +538,21 @@ class SPHSolver:
 
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-5)
-
-                # Compute Density change
-                if self.is_fluid(p_j) == 1:
-                    d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
-                             * (self.particle_velocity_new[p_i] - self.particle_velocity_new[p_j]).dot(r / r_mod)
-                elif self.is_fluid(p_j) == 0:
-                    d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
-                             * self.particle_velocity_new[p_i].dot(r / r_mod)
+                r_mod = r.norm()
+                if r_mod > 1e-4:
+                    # Compute Density change
+                    if self.is_fluid(p_j) == 1:
+                        d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
+                                 * (self.particle_velocity_new[p_i] - self.particle_velocity_new[p_j]).dot(r / r_mod)
+                    elif self.is_fluid(p_j) == 0:
+                        d_rho += self.m * self.cubic_kernel_derivative(r_mod, self.dh) \
+                                 * self.particle_velocity_new[p_i].dot(r / r_mod)
 
             # Compute the predicted density rho star
             self.particle_density_new[p_i][
                 0] = self.particle_density[p_i][0] + self.dt * d_rho
 
-            # Clamp: only consider compressed
+            # Only consider compressed
             err = ti.max(0.0, self.particle_density_new[p_i][0] - self.rho_0)
             self.particle_stiff[p_i][0] = err * self.particle_alpha[p_i][0]
 
@@ -565,20 +569,24 @@ class SPHSolver:
                 pos_j = self.particle_positions[p_j]
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-5)
+                r_mod = r.norm()
 
-                if self.is_fluid(p_j) == 1:
-                    d_v += self.m * (self.particle_stiff[p_i][0] +
-                                     self.particle_stiff[p_j][0]
-                                     ) * self.cubic_kernel_derivative(
-                                         r_mod, self.dh) * r / r_mod
-                elif self.is_fluid(p_j) == 0:
-                    d_v += self.m * self.particle_stiff[p_i][
-                        0] * self.cubic_kernel_derivative(r_mod,
-                                                          self.dh) * r / r_mod
+                if r_mod > 1e-4:
+                    if self.is_fluid(p_j) == 1:
+                        d_v += self.m * (self.particle_stiff[p_i][0] +
+                                         self.particle_stiff[p_j][0]
+                                         ) * self.cubic_kernel_derivative(
+                                             r_mod, self.dh) * r / r_mod
+                    elif self.is_fluid(p_j) == 0:
+                        d_v += self.m * self.particle_stiff[
+                            p_i][0] * self.cubic_kernel_derivative(
+                                r_mod, self.dh) * r / r_mod
 
             # Predict velocity using pressure contribution
-            self.particle_velocity_new[p_i] += d_v / self.dt
+            self.particle_velocity_new[p_i] += d_v / ti.max(self.dt, 1e-5)
+            # Store the pressure contribution to acceleration
+            self.particle_pressure_acc[p_i] = d_v / ti.max(
+                self.dt * self.dt, 1e-8)
 
     @ti.kernel
     def df_update_positions(self):
@@ -600,17 +608,17 @@ class SPHSolver:
                 pos_j = self.particle_positions[p_j]
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-5)
+                r_mod = r.norm()
+                if r_mod > 1e-4:
+                    # Compute the grad sum and grad square sum for denominator alpha
+                    grad_val = self.m * self.cubic_kernel_derivative(
+                        r_mod, self.dh) * r / r_mod
+                    grad_sum += grad_val
 
-                # Compute the grad sum and grad square sum for denominator alpha
-                grad_val = self.m * self.cubic_kernel_derivative(
-                    r_mod, self.dh) * r / r_mod
-                grad_sum += grad_val
-
-                if self.is_fluid(p_j) == 1:
-                    grad_square_sum += grad_val.dot(grad_val)
-                # Compute the density
-                curr_rho += self.m * self.cubic_kernel(r_mod, self.dh)
+                    if self.is_fluid(p_j) == 1:
+                        grad_square_sum += grad_val.dot(grad_val)
+                    # Compute the density
+                    curr_rho += self.m * self.cubic_kernel(r_mod, self.dh)
             # Update the density
             self.particle_density[p_i][0] = curr_rho
             # Set a threshold of 10^-6 to avoid instability
@@ -627,23 +635,24 @@ class SPHSolver:
                 pos_j = self.particle_positions[p_j]
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-5)
+                r_mod = r.norm()
 
-                if self.is_fluid(p_j) == 1:
-                    d_rho += self.m * (
-                        self.particle_velocity_new[p_i] -
-                        self.particle_velocity_new[p_j]).dot(
+                if r_mod > 1e-4:
+                    if self.is_fluid(p_j) == 1:
+                        d_rho += self.m * (
+                            self.particle_velocity_new[p_i] -
+                            self.particle_velocity_new[p_j]).dot(
+                                r / r_mod) * self.cubic_kernel_derivative(
+                                    r_mod, self.dh)
+                    # Boundary particles have no contributions to pressure force
+                    elif self.is_fluid(p_j) == 0:
+                        d_rho += self.m * self.particle_velocity_new[p_i].dot(
                             r / r_mod) * self.cubic_kernel_derivative(
                                 r_mod, self.dh)
-                # Boundary particles have no contributions to pressure force
-                elif self.is_fluid(p_j) == 0:
-                    d_rho += self.m * self.particle_velocity_new[p_i].dot(
-                        r / r_mod) * self.cubic_kernel_derivative(
-                            r_mod, self.dh)
 
             self.d_density[p_i][0] = ti.max(d_rho, 0.0)
 
-            # Clamp: if the density is less than the rest density, skip update in this iteration
+            # if the density is less than the rest density, skip update in this iteration
             if self.particle_density[p_i][0] + self.dt * self.d_density[p_i][
                     0] < self.rho_0 and self.particle_density[p_i][
                         0] < self.rho_0:
@@ -665,20 +674,23 @@ class SPHSolver:
                 pos_j = self.particle_positions[p_j]
                 # Compute distance and its mod
                 r = pos_i - pos_j
-                r_mod = ti.max(r.norm(), 1e-5)
+                r_mod = r.norm()
 
-                if self.is_fluid(p_j) == 1:
-                    d_v += self.m * (self.particle_stiff[p_i][0] +
-                                     self.particle_stiff[p_j][0]
-                                     ) * self.cubic_kernel_derivative(
-                                         r_mod, self.dh) * r / r_mod
-                elif self.is_fluid(p_j) == 0:
-                    d_v += self.m * self.particle_stiff[p_i][
-                        0] * self.cubic_kernel_derivative(r_mod,
-                                                          self.dh) * r / r_mod
+                if r_mod > 1e-5:
+                    if self.is_fluid(p_j) == 1:
+                        d_v += self.m * (self.particle_stiff[p_i][0] +
+                                         self.particle_stiff[p_j][0]
+                                         ) * self.cubic_kernel_derivative(
+                                             r_mod, self.dh) * r / r_mod
+                    elif self.is_fluid(p_j) == 0:
+                        d_v += self.m * self.particle_stiff[
+                            p_i][0] * self.cubic_kernel_derivative(
+                                r_mod, self.dh) * r / r_mod
 
-            # Predict velocity using pressure contribution
+            # Predict velocity using pressure contribution, dt has been cancelled
             self.particle_velocity_new[p_i] += d_v
+            # Store the pressure contribution to acceleration
+            self.particle_pressure_acc[p_i] = d_v / self.dt
 
     @ti.kernel
     def df_update_velocities(self):
@@ -740,7 +752,7 @@ class SPHSolver:
         self.max_rho = np.max(self.particle_density.to_numpy()[:total_num])
         self.max_pressure = np.max(
             self.particle_pressure.to_numpy()[:total_num])
-        dt_a = self.dh / (self.c_0 * np.sqrt(
+        dt_a = 0.20 * self.dh / (self.c_0 * np.sqrt(
             (self.max_rho / self.rho_0)**self.gamma))
 
         if self.adaptive_time_step and self.method == SPHSolver.method_WCSPH:
@@ -790,8 +802,8 @@ class SPHSolver:
             # Correct divergence error
             self.it = 0
             self.sum_drho[None] = 0.0
-            # 0.1% rho_0
-            while self.sum_drho[None] >= 0.001 * self.particle_num[
+            # 1% rho_0
+            while self.sum_drho[None] >= 0.01 * self.particle_num[
                     None] * self.rho_0 or self.it < 1:
                 self.sum_drho[None] = 0.0
                 self.df_correct_divergence_compute_drho()
@@ -813,8 +825,8 @@ class SPHSolver:
             # Correct density error
             self.it = 0
             self.sum_rho_err[None] = 0.0
-            # 0.1% rho_0
-            while self.sum_rho_err[None] >= 0.001 * self.particle_num[
+            # 1% rho_0
+            while self.sum_rho_err[None] >= 0.01 * self.particle_num[
                     None] * self.rho_0 or self.it < 2:
                 self.sum_rho_err[None] = 0.0
                 self.df_correct_density_predict()
