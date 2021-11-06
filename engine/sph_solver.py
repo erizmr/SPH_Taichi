@@ -53,7 +53,7 @@ class SPHSolver:
         self.dx = dx  # Particle radius
         self.dh = self.dx * self.df_fac  # Smooth length
         # Declare dt as ti var for adaptive time step
-        self.dt = ti.var(ti.f32, shape=())
+        self.dt = ti.field(ti.f32, shape=())
         # Particle parameters
         self.m = self.dx**self.dim * self.rho_0
 
@@ -74,51 +74,51 @@ class SPHSolver:
 
         # ----------- PCISPH parameters-----------------
         # Scaling factor for PCISPH
-        self.s_f = ti.var(ti.f32, shape=())
+        self.s_f = ti.field(ti.f32, shape=())
         # Max iteration steps for pressure correction
         self.it = 0
         self.max_it = 0
         self.sub_max_iteration = 3
-        self.rho_err = ti.Vector(1, dt=ti.f32, shape=())
-        self.max_rho_err = ti.Vector(1, dt=ti.f32, shape=())
+        self.rho_err = ti.Vector.field(1, dtype=ti.f32, shape=())
+        self.max_rho_err = ti.Vector.field(1, dtype=ti.f32, shape=())
 
         # ----------- DFSPH parameters-----------------
         # Summing up the rho for all particles to compute the average rho
-        self.sum_rho_err = ti.var(ti.f32, shape=())
-        self.sum_drho = ti.var(ti.f32, shape=())
+        self.sum_rho_err = ti.field(ti.f32, shape=())
+        self.sum_drho = ti.field(ti.f32, shape=())
 
         # Dynamic Fill particles use
-        self.source_bound = ti.Vector(self.dim, dt=ti.f32, shape=2)
-        self.source_velocity = ti.Vector(self.dim, dt=ti.f32, shape=())
-        self.source_pressure = ti.Vector(1, dt=ti.f32, shape=())
-        self.source_density = ti.Vector(1, dt=ti.f32, shape=())
+        self.source_bound = ti.Vector.field(self.dim, dtype=ti.f32, shape=2)
+        self.source_velocity = ti.Vector.field(self.dim, dtype=ti.f32, shape=())
+        self.source_pressure = ti.Vector.field(1, dtype=ti.f32, shape=())
+        self.source_density = ti.Vector.field(1, dtype=ti.f32, shape=())
 
-        self.particle_num = ti.var(ti.i32, shape=())
-        self.particle_positions = ti.Vector(self.dim, dt=ti.f32)
-        self.particle_velocity = ti.Vector(self.dim, dt=ti.f32)
-        self.particle_positions_new = ti.Vector(
-            self.dim, dt=ti.f32)  # Prediction values for P-C scheme use
-        self.particle_velocity_new = ti.Vector(
-            self.dim, dt=ti.f32)  # Prediction values for P-C scheme use
-        self.particle_pressure = ti.Vector(1, dt=ti.f32)
-        self.particle_pressure_acc = ti.Vector(
-            self.dim, dt=ti.f32)  # pressure force for PCISPH use
-        self.particle_density = ti.Vector(1, dt=ti.f32)
-        self.particle_density_new = ti.Vector(
-            1, dt=ti.f32)  # Prediction values for P-C scheme use
-        self.particle_alpha = ti.Vector(1, dt=ti.f32)  # For DFSPH use
-        self.particle_stiff = ti.Vector(1, dt=ti.f32)  # For DFSPH use
+        self.particle_num = ti.field(ti.i32, shape=())
+        self.particle_positions = ti.Vector.field(self.dim, dtype=ti.f32)
+        self.particle_velocity = ti.Vector.field(self.dim, dtype=ti.f32)
+        self.particle_positions_new = ti.Vector.field(
+            self.dim, dtype=ti.f32)  # Prediction values for P-C scheme use
+        self.particle_velocity_new = ti.Vector.field(
+            self.dim, dtype=ti.f32)  # Prediction values for P-C scheme use
+        self.particle_pressure = ti.Vector.field(1, dtype=ti.f32)
+        self.particle_pressure_acc = ti.Vector.field(
+            self.dim, dtype=ti.f32)  # pressure force for PCISPH use
+        self.particle_density = ti.Vector.field(1, dtype=ti.f32)
+        self.particle_density_new = ti.Vector.field(
+            1, dtype=ti.f32)  # Prediction values for P-C scheme use
+        self.particle_alpha = ti.Vector.field(1, dtype=ti.f32)  # For DFSPH use
+        self.particle_stiff = ti.Vector.field(1, dtype=ti.f32)  # For DFSPH use
 
-        self.color = ti.var(dt=ti.f32)
-        self.material = ti.var(dt=ti.f32)
+        self.color = ti.field(dtype=ti.f32)
+        self.material = ti.field(dtype=ti.f32)
 
-        self.d_velocity = ti.Vector(self.dim, dt=ti.f32)
-        self.d_density = ti.Vector(1, dt=ti.f32)
+        self.d_velocity = ti.Vector.field(self.dim, dtype=ti.f32)
+        self.d_density = ti.Vector.field(1, dtype=ti.f32)
 
-        self.grid_num_particles = ti.var(ti.i32)
-        self.grid2particles = ti.var(ti.i32)
-        self.particle_num_neighbors = ti.var(ti.i32)
-        self.particle_neighbors = ti.var(ti.i32)
+        self.grid_num_particles = ti.field(ti.i32)
+        self.grid2particles = ti.field(ti.i32)
+        self.particle_num_neighbors = ti.field(ti.i32)
+        self.particle_neighbors = ti.field(ti.i32)
 
         self.max_num_particles_per_cell = 100
         self.max_num_neighbors = 100
@@ -273,7 +273,7 @@ class SPHSolver:
     @ti.func
     def pressure_force(self, ptc_i, ptc_j, r, r_mod):
         # Compute the pressure force contribution, Symmetric Formula
-        res = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+        res = ti.Vector([0.0 for _ in range(self.dim)])
         res = -self.m * (self.particle_pressure[ptc_i][0] / self.particle_density[ptc_i][0] ** 2
                          + self.particle_pressure[ptc_j][0] / self.particle_density[ptc_j][0] ** 2) \
               * self.cubic_kernel_derivative(r_mod, self.dh) * r / r_mod
@@ -282,7 +282,7 @@ class SPHSolver:
     @ti.func
     def viscosity_force(self, ptc_i, ptc_j, r, r_mod):
         # Compute the viscosity force contribution, artificial viscosity
-        res = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+        res = ti.Vector([0.0 for _ in range(self.dim)])
         v_xy = (self.particle_velocity[ptc_i] -
                 self.particle_velocity[ptc_j]).dot(r)
         if v_xy < 0:
@@ -314,19 +314,19 @@ class SPHSolver:
                 pos = self.particle_positions[p_i]
                 if pos[0] < self.left_bound + 0.5 * self.padding:
                     self.simulate_collisions(
-                        p_i, ti.Vector([1.0, 0.0], dt=ti.f32),
+                        p_i, ti.Vector([1.0, 0.0]),
                         self.left_bound + 0.5 * self.padding - pos[0])
                 if pos[0] > self.right_bound - 0.5 * self.padding:
                     self.simulate_collisions(
-                        p_i, ti.Vector([-1.0, 0.0], dt=ti.f32),
+                        p_i, ti.Vector([-1.0, 0.0]),
                         pos[0] - self.right_bound + 0.5 * self.padding)
                 if pos[1] > self.top_bound - self.padding:
                     self.simulate_collisions(
-                        p_i, ti.Vector([0.0, -1.0], dt=ti.f32),
+                        p_i, ti.Vector([0.0, -1.0]),
                         pos[1] - self.top_bound + self.padding)
                 if pos[1] < self.bottom_bound + self.padding:
                     self.simulate_collisions(
-                        p_i, ti.Vector([0.0, 1.0], dt=ti.f32),
+                        p_i, ti.Vector([0.0, 1.0]),
                         self.bottom_bound + self.padding - pos[1])
 
     @ti.kernel
@@ -357,7 +357,7 @@ class SPHSolver:
             if self.is_fluid(p_i) == 1:
                 val = [0.0 for _ in range(self.dim - 1)]
                 val.extend([self.g])
-                d_v += ti.Vector(val, dt=ti.f32)
+                d_v += ti.Vector(val)
             self.d_velocity[p_i] = d_v
             self.d_density[p_i][0] = d_rho
 
@@ -366,17 +366,17 @@ class SPHSolver:
         # Simple Forward Euler currently
         for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
-                self.particle_velocity[p_i] += self.dt * self.d_velocity[p_i]
+                self.particle_velocity[p_i] += self.dt[None] * self.d_velocity[p_i]
                 self.particle_positions[
-                    p_i] += self.dt * self.particle_velocity[p_i]
-            self.particle_density[p_i][0] += self.dt * self.d_density[p_i][0]
+                    p_i] += self.dt[None] * self.particle_velocity[p_i]
+            self.particle_density[p_i][0] += self.dt[None] * self.d_density[p_i][0]
             self.particle_pressure[p_i][0] = self.p_update(
                 self.particle_density[p_i][0], self.rho_0, self.gamma,
                 self.c_0)
 
     @ti.kernel
     def pci_scaling_factor(self):
-        grad_sum = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+        grad_sum = ti.Vector([0.0 for _ in range(self.dim)])
         grad_dot_sum = 0.0
         range_num = ti.cast(self.dh * 2.0 / self.dx, ti.i32)
         half_range = ti.cast(0.5 * range_num, ti.i32)
@@ -391,7 +391,7 @@ class SPHSolver:
                     grad_sum += grad
                     grad_dot_sum += grad.dot(grad)
 
-        beta = 2 * (self.dt * self.m / self.rho_0)**2
+        beta = 2 * (self.dt[None] * self.m / self.rho_0)**2
         self.s_f[None] = 1.0 / ti.max(
             beta * (grad_sum.dot(grad_sum) + grad_dot_sum), 1e-6)
 
@@ -400,10 +400,10 @@ class SPHSolver:
         for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 self.particle_velocity_new[
-                    p_i] = self.particle_velocity[p_i] + self.dt * (
+                    p_i] = self.particle_velocity[p_i] + self.dt[None] * (
                         self.d_velocity[p_i] + self.particle_pressure_acc[p_i])
                 self.particle_positions_new[p_i] = self.particle_positions[
-                    p_i] + self.dt * self.particle_velocity_new[p_i]
+                    p_i] + self.dt[None] * self.particle_velocity_new[p_i]
         # Initialize the max_rho_err
         self.max_rho_err[None][0] = 0.0
 
@@ -428,7 +428,7 @@ class SPHSolver:
             self.d_density[p_i][0] = d_rho
             # Avoid negative density variation
             self.rho_err[None][0] = self.particle_density[p_i][
-                0] + self.dt * d_rho - self.rho_0
+                0] + self.dt[None] * d_rho - self.rho_0
             self.max_rho_err[None][0] = max(abs(self.rho_err[None][0]),
                                             self.max_rho_err[None][0])
             self.particle_pressure[p_i][
@@ -438,7 +438,7 @@ class SPHSolver:
     def pci_update_pressure_force(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions_new[p_i]
-            d_vp = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+            d_vp = ti.Vector([0.0 for _ in range(self.dim)])
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
                 pos_j = self.particle_positions_new[p_j]
@@ -459,7 +459,7 @@ class SPHSolver:
     def pci_compute_deltas(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+            d_v = ti.Vector([0.0 for _ in range(self.dim)])
 
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
@@ -477,30 +477,30 @@ class SPHSolver:
             if self.is_fluid(p_i) == 1:
                 val = [0.0 for _ in range(self.dim - 1)]
                 val.extend([self.g])
-                d_v += ti.Vector(val, dt=ti.f32)
+                d_v += ti.Vector(val)
             self.d_velocity[p_i] = d_v
             # Initialize the pressure
             self.particle_pressure[p_i][0] = 0.0
             self.particle_pressure_acc[p_i] = ti.Vector(
-                [0.0 for _ in range(self.dim)], dt=ti.f32)
+                [0.0 for _ in range(self.dim)])
 
     @ti.kernel
     def pci_update_time_step(self):
         # Final position and velocity update
         for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
-                self.particle_velocity[p_i] += self.dt * (
+                self.particle_velocity[p_i] += self.dt[None] * (
                     self.d_velocity[p_i] + self.particle_pressure_acc[p_i])
                 self.particle_positions[
-                    p_i] += self.dt * self.particle_velocity[p_i]
+                    p_i] += self.dt[None] * self.particle_velocity[p_i]
             # Update density
-            self.particle_density[p_i][0] += self.dt * self.d_density[p_i][0]
+            self.particle_density[p_i][0] += self.dt[None] * self.d_density[p_i][0]
 
     @ti.kernel
     def df_compute_deltas(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+            d_v = ti.Vector([0.0 for _ in range(self.dim)])
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
                 pos_j = self.particle_positions[p_j]
@@ -517,7 +517,7 @@ class SPHSolver:
             if self.is_fluid(p_i) == 1:
                 val = [0.0 for _ in range(self.dim - 1)]
                 val.extend([self.g])
-                d_v += ti.Vector(val, dt=ti.f32)
+                d_v += ti.Vector(val, dtype=ti.f32)
             self.d_velocity[p_i] = d_v
 
     @ti.kernel
@@ -525,7 +525,7 @@ class SPHSolver:
         for p_i in range(self.particle_num[None]):
             if self.is_fluid(p_i) == 1:
                 self.particle_velocity_new[p_i] = self.particle_velocity[
-                    p_i] + self.dt * self.d_velocity[p_i]
+                    p_i] + self.dt[None] * self.d_velocity[p_i]
 
     @ti.kernel
     def df_correct_density_predict(self):
@@ -550,7 +550,7 @@ class SPHSolver:
 
             # Compute the predicted density rho star
             self.particle_density_new[p_i][
-                0] = self.particle_density[p_i][0] + self.dt * d_rho
+                0] = self.particle_density[p_i][0] + self.dt[None] * d_rho
 
             # Only consider compressed
             err = ti.max(0.0, self.particle_density_new[p_i][0] - self.rho_0)
@@ -563,7 +563,7 @@ class SPHSolver:
     def df_correct_density_adapt_vel(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+            d_v = ti.Vector([0.0 for _ in range(self.dim)], dtype=ti.f32)
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
                 pos_j = self.particle_positions[p_j]
@@ -583,10 +583,10 @@ class SPHSolver:
                                 r_mod, self.dh) * r / r_mod
 
             # Predict velocity using pressure contribution
-            self.particle_velocity_new[p_i] += d_v / ti.max(self.dt, 1e-5)
+            self.particle_velocity_new[p_i] += d_v / ti.max(self.dt[None], 1e-5)
             # Store the pressure contribution to acceleration
             self.particle_pressure_acc[p_i] = d_v / ti.max(
-                self.dt * self.dt, 1e-8)
+                self.dt[None] * self.dt[None], 1e-8)
 
     @ti.kernel
     def df_update_positions(self):
@@ -594,13 +594,13 @@ class SPHSolver:
             # Update the positions
             if self.is_fluid(p_i) == 1:
                 self.particle_positions[
-                    p_i] += self.dt * self.particle_velocity_new[p_i]
+                    p_i] += self.dt[None] * self.particle_velocity_new[p_i]
 
     @ti.kernel
     def df_compute_density_alpha(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            grad_sum = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+            grad_sum = ti.Vector([0.0 for _ in range(self.dim)])
             grad_square_sum = 0.0
             curr_rho = 0.0
             for j in range(self.particle_num_neighbors[p_i]):
@@ -653,7 +653,7 @@ class SPHSolver:
             self.d_density[p_i][0] = ti.max(d_rho, 0.0)
 
             # if the density is less than the rest density, skip update in this iteration
-            if self.particle_density[p_i][0] + self.dt * self.d_density[p_i][
+            if self.particle_density[p_i][0] + self.dt[None] * self.d_density[p_i][
                     0] < self.rho_0 and self.particle_density[p_i][
                         0] < self.rho_0:
                 self.d_density[p_i][0] = 0.0
@@ -667,7 +667,7 @@ class SPHSolver:
     def df_correct_divergence_adapt_vel(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0 for _ in range(self.dim)], dt=ti.f32)
+            d_v = ti.Vector([0.0 for _ in range(self.dim)], dtype=ti.f32)
 
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
@@ -690,7 +690,7 @@ class SPHSolver:
             # Predict velocity using pressure contribution, dt has been cancelled
             self.particle_velocity_new[p_i] += d_v
             # Store the pressure contribution to acceleration
-            self.particle_pressure_acc[p_i] = d_v / self.dt
+            self.particle_pressure_acc[p_i] = d_v / self.dt[None]
 
     @ti.kernel
     def df_update_velocities(self):
@@ -700,7 +700,7 @@ class SPHSolver:
                 self.particle_velocity[p_i] = self.particle_velocity_new[p_i]
 
     def sim_info(self, output=False):
-        print("Time step: ", self.dt)
+        print("Time step: ", self.dt[None])
         print(
             "Domain: (%s, %s, %s, %s)" %
             (self.x_min, self.x_max, self.y_min, self.y_max), )
@@ -857,11 +857,9 @@ class SPHSolver:
         self.particle_positions_new[i] = x
         self.particle_velocity[i] = velocity
         self.particle_velocity_new[i] = velocity
-        self.d_velocity[i] = ti.Vector([0.0 for _ in range(self.dim)],
-                                       dt=ti.f32)
+        self.d_velocity[i] = ti.Vector([0.0 for _ in range(self.dim)])
         self.particle_pressure[i] = pressure
-        self.particle_pressure_acc[i] = ti.Vector(
-            [0.0 for _ in range(self.dim)], dt=ti.f32)
+        self.particle_pressure_acc[i] = ti.Vector([0.0 for _ in range(self.dim)])
         self.particle_density[i] = density
         self.particle_density_new[i] = density
         self.d_density[i][0] = 0.0

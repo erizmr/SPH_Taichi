@@ -8,14 +8,11 @@ import argparse
 ti.init(arch=ti.cpu)
 
 
-def main():
+def main(opt):
     dynamic_allocate = False
-    save_frames = True
-    adaptive_time_step = True
-    # method_name = 'WCSPH'
-    method_name = 'PCISPH'
-    # method_name = 'DFSPH'
-
+    save_frames = opt.save
+    adaptive_time_step = opt.adaptive
+    method_name = opt.method
     sim_physical_time = 5.0
     max_frame = 50000
 
@@ -86,12 +83,18 @@ def main():
                     color=particles['color'])
 
         # Save in fixed frame interval, for fixed time step
-        if not adaptive_time_step and frame % 50 == 0:
-            gui.show(f'{frame:06d}.png' if save_frames else None)
+        if not adaptive_time_step:
+            if frame % 50 == 0:
+                gui.show(f'{frame:06d}.png' if save_frames else None)
+            else:
+                gui.show()
 
         # Save in fixed frame per second, for adaptive time step
-        if adaptive_time_step and save_cnt >= save_point:
-            gui.show(f'{frame:06d}.png' if save_frames else None)
+        if adaptive_time_step:
+            if save_cnt >= save_point:
+                gui.show(f'{frame:06d}.png' if save_frames else None)
+            else:
+                gui.show()
             save_cnt = 0.0
 
         frame += 1
@@ -108,5 +111,11 @@ if __name__ == '__main__':
                         type=str,
                         default="PCISPH",
                         help="SPH methods: WCSPH, PCISPH, DFSPH")
+    parser.add_argument("--save",
+                        action='store_true',
+                        help="save frames")
+    parser.add_argument("--adaptive",
+                        action='store_true',
+                        help="whether apply adaptive step size")
     opt = parser.parse_args()
-    main()
+    main(opt)
