@@ -7,12 +7,14 @@ Currently, the following features have been implemented:
 - Predictive-Corrective Incompressible SPH (PCISPH)[2]
 - Divergence free SPH (DFSPH)[3]
 
-Taichi Version: ```0.6.10```
+### Note: Updates on November 6, 2021
+The code is now compatible with Taichi `v0.8.3`.
+
 ## Example
 
 - Demo (PCISPH, 4.5k particles)
 
-Run ```python scene.py```
+Run ```python scene.py --method PCISPH```
 <p align="center">
   <img src="https://github.com/erizmr/SPH_Taichi/blob/master/img/PCISPH.gif" width="50%" height="50%" />
 </p>
