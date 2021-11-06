@@ -9,7 +9,7 @@ ti.init(arch=ti.cpu)
 
 
 def main(opt):
-    dynamic_allocate = False
+    dynamic_allocate = opt.dynamic_allocate
     save_frames = opt.save
     adaptive_time_step = opt.adaptive
     method_name = opt.method
@@ -117,5 +117,8 @@ if __name__ == '__main__':
     parser.add_argument("--adaptive",
                         action='store_true',
                         help="whether apply adaptive step size")
+    parser.add_argument("--dynamic-allocate",
+                        action='store_true',
+                        help="whether apply dynamic allocation")
     opt = parser.parse_args()
     main(opt)

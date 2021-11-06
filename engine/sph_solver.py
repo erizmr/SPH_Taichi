@@ -247,7 +247,7 @@ class SPHSolver:
 
     @ti.func
     def cubic_kernel_derivative(self, r, h):
-        # derivative of cubcic spline smoothing kernel
+        # derivative of cubic spline smoothing kernel
         k = 10. / (7. * np.pi * h**self.dim)
         q = r / h
         # assert q > 0.0
@@ -517,7 +517,7 @@ class SPHSolver:
             if self.is_fluid(p_i) == 1:
                 val = [0.0 for _ in range(self.dim - 1)]
                 val.extend([self.g])
-                d_v += ti.Vector(val, dtype=ti.f32)
+                d_v += ti.Vector(val)
             self.d_velocity[p_i] = d_v
 
     @ti.kernel
@@ -563,7 +563,7 @@ class SPHSolver:
     def df_correct_density_adapt_vel(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0 for _ in range(self.dim)], dtype=ti.f32)
+            d_v = ti.Vector([0.0 for _ in range(self.dim)])
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
                 pos_j = self.particle_positions[p_j]
@@ -667,7 +667,7 @@ class SPHSolver:
     def df_correct_divergence_adapt_vel(self):
         for p_i in range(self.particle_num[None]):
             pos_i = self.particle_positions[p_i]
-            d_v = ti.Vector([0.0 for _ in range(self.dim)], dtype=ti.f32)
+            d_v = ti.Vector([0.0 for _ in range(self.dim)])
 
             for j in range(self.particle_num_neighbors[p_i]):
                 p_j = self.particle_neighbors[p_i, j]
