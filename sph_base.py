@@ -89,8 +89,10 @@ class WCSPHSolver(SPHBase):
         self.c_0 = 200.0
         self.d_velocity = ti.Vector.field(self.ps.dim, dtype=float)
         self.d_density = ti.field(float)
-        self.ps.particles_node.place(self.d_velocity)
-        self.ps.particles_node.place(self.d_density)
+
+        particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
+        particle_node.place(self.d_velocity)
+        particle_node.place(self.d_density)
 
     @ti.func
     def rho_derivative(self, p_i, p_j, r, r_mod):
@@ -107,6 +109,7 @@ class WCSPHSolver(SPHBase):
     @ti.kernel
     def compute_forces(self):
         for p_i in range(self.ps.particle_num[None]):
+            pass
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             d_rho = 0.0
@@ -132,6 +135,7 @@ class WCSPHSolver(SPHBase):
                 d_v += ti.Vector([0.0, self.g] if self.ps.dim == 2 else [0.0, 0.0, self.g])
             self.d_velocity[p_i] = d_v
             self.d_density[p_i] = d_rho
+
 
     @ti.kernel
     def advect(self):

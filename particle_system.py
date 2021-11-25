@@ -13,7 +13,7 @@ class ParticleSystem:
         self.boundary = 0
         self.fluid = 1
 
-        self.h = 1.0  # support radius
+        self.h = 0.5  # support radius
         self.dx = 0.2  # particle radius
         self.particle_max_num = 2**18
         self.particle_max_num_per_cell = 100
@@ -201,3 +201,4 @@ class ParticleSystem:
         density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000)
         pressure = np.full_like(np.zeros(num_new_particles), density if density is not None else 0)
         self.add_particles(num_new_particles, new_positions, velocity, density, pressure, material, color)
+        print("PARTICLE NUM ", self.particle_num[None])
