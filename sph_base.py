@@ -13,7 +13,7 @@ class SPHBase:
         self.CFL_v = 0.25  # CFL coefficient for velocity
         self.CFL_a = 0.05  # CFL coefficient for acceleration
         self.dt = ti.field(float, shape=())
-        self.dt[None] = 1e-4
+        self.dt[None] = 1e-5
 
     @ti.func
     def cubic_kernel(self, r):
@@ -62,10 +62,11 @@ class SPHBase:
     @ti.func
     def pressure_force(self, p_i, p_j, r, r_mod):
         # Compute the pressure force contribution, Symmetric Formula
-        res = ti.Vector([0.0 for _ in range(self.ps.dim)])
+        # res = ti.Vector([0.0 for _ in range(self.ps.dim)])
         res = -self.m * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
                          + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
               * self.cubic_kernel_derivative(r_mod) * r / r_mod
+        # print(res)
         return res
 
     def substep(self):
@@ -91,8 +92,7 @@ class WCSPHSolver(SPHBase):
         self.d_density = ti.field(float)
 
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
-        particle_node.place(self.d_velocity)
-        particle_node.place(self.d_density)
+        particle_node.place(self.d_velocity, self.d_density)
 
     @ti.func
     def rho_derivative(self, p_i, p_j, r, r_mod):
@@ -109,7 +109,6 @@ class WCSPHSolver(SPHBase):
     @ti.kernel
     def compute_forces(self):
         for p_i in range(self.ps.particle_num[None]):
-            pass
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             d_rho = 0.0
@@ -126,16 +125,15 @@ class WCSPHSolver(SPHBase):
 
                 if self.ps.material[p_i] == 1:
                     # Compute Viscosity force contribution
-                    d_v += self.viscosity_force(p_i, p_j, r, r_mod)
+                    # d_v += self.viscosity_force(p_i, p_j, r, r_mod)
                     # Compute Pressure force contribution
                     d_v += self.pressure_force(p_i, p_j, r, r_mod)
-
+                    pass
             # Add body force
             if self.ps.material[p_i] == 1:
                 d_v += ti.Vector([0.0, self.g] if self.ps.dim == 2 else [0.0, 0.0, self.g])
             self.d_velocity[p_i] = d_v
             self.d_density[p_i] = d_rho
-
 
     @ti.kernel
     def advect(self):
@@ -148,7 +146,6 @@ class WCSPHSolver(SPHBase):
             self.ps.pressure[p_i] = self.pressure_update(
                 self.ps.density[p_i], self.rho_0, self.gamma,
                 self.c_0)
-
 
     def substep(self):
         self.compute_forces()

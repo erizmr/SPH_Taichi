@@ -13,9 +13,9 @@ class ParticleSystem:
         self.boundary = 0
         self.fluid = 1
 
-        self.h = 0.5  # support radius
         self.dx = 0.2  # particle radius
-        self.particle_max_num = 2**18
+        self.h = self.dx * 2.6  # support radius
+        self.particle_max_num = 2**15
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
@@ -74,9 +74,9 @@ class ParticleSystem:
                 v[d] = new_particles_velocity[p - self.particle_num[None], d]
                 x[d] = new_particles_positions[p - self.particle_num[None], d]
             self.add_particle(p, x, v, new_particle_density[p],
-                              new_particle_pressure[p],
-                              new_particles_material[p],
-                              new_particles_color[p])
+                              new_particle_pressure[p - self.particle_num[None]],
+                              new_particles_material[p - self.particle_num[None]],
+                              new_particles_color[p - self.particle_num[None]])
         self.particle_num[None] += new_particles_num
     
     @ti.func
@@ -184,13 +184,6 @@ class ParticleSystem:
         new_positions = new_positions.reshape(-1,
             reduce(lambda x, y: x * y, list(new_positions.shape[1:]))).transpose()
         print("new position shape ", new_positions.shape)
-        # for i in range(self.dim):
-        #     self.source_bound[0][i] = lower_corner[i]
-        #     self.source_bound[1][i] = cube_size[i]
-        #
-        # self.set_source_velocity(velocity=velocity)
-        # self.set_source_pressure(pressure=pressure)
-        # self.set_source_density(density=density)
         if velocity is None:
             velocity = np.full_like(new_positions, 0)
         else:
@@ -198,7 +191,6 @@ class ParticleSystem:
 
         material = np.full_like(np.zeros(num_new_particles), material)
         color = np.full_like(np.zeros(num_new_particles), color)
-        density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000)
-        pressure = np.full_like(np.zeros(num_new_particles), density if density is not None else 0)
+        density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
+        pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
         self.add_particles(num_new_particles, new_positions, velocity, density, pressure, material, color)
-        print("PARTICLE NUM ", self.particle_num[None])
