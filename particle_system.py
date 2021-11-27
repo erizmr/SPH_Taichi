@@ -10,18 +10,20 @@ class ParticleSystem:
         assert self.dim > 1
         self.screen_to_world_ratio = 50
         # Material
-        self.boundary = 0
-        self.fluid = 1
+        self.material_boundary = 0
+        self.material_fluid = 1
 
-        self.dx = 0.2  # particle radius
-        self.h = self.dx * 2.6  # support radius
+        self.particle_radius = 0.1  # particle radius
+        self.particle_diameter = 2 * self.particle_radius
+        self.support_radius = self.particle_radius * 4.0  # support radius
+        self.m_V = 0.8 * self.particle_diameter**self.dim
         self.particle_max_num = 2**15
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
 
         # Grid related properties
-        self.grid_size = self.h
+        self.grid_size = self.support_radius
         self.grid_num = np.ceil(np.array(res) / self.grid_size).astype(int)
         self.grid_particles_num = ti.field(int)
         self.grid_particles = ti.field(int)
@@ -73,7 +75,8 @@ class ParticleSystem:
             for d in ti.static(range(self.dim)):
                 v[d] = new_particles_velocity[p - self.particle_num[None], d]
                 x[d] = new_particles_positions[p - self.particle_num[None], d]
-            self.add_particle(p, x, v, new_particle_density[p],
+            self.add_particle(p, x, v, 
+                              new_particle_density[p - self.particle_num[None]],
                               new_particle_pressure[p - self.particle_num[None]],
                               new_particles_material[p - self.particle_num[None]],
                               new_particles_color[p - self.particle_num[None]])
@@ -81,7 +84,7 @@ class ParticleSystem:
     
     @ti.func
     def pos_to_index(self, pos):
-        return int(pos / self.grid_size)
+        return (pos / self.grid_size).cast(int)
 
     @ti.func
     def is_valid_cell(self, cell):
@@ -95,15 +98,17 @@ class ParticleSystem:
     def allocate_particles_to_grid(self):
         for p in range(self.particle_num[None]):
             cell = self.pos_to_index(self.x[p])
-            offset = self.grid_particles_num[cell]
+            offset = self.grid_particles_num[cell].atomic_add(1)
             self.grid_particles[cell, offset] = p
-            self.grid_particles_num[cell] += 1
+            # self.grid_particles_num[cell] += 1
+            # if p == 770:
+            #     print("p cell num ", p, cell, self.grid_particles_num[cell])
 
     @ti.kernel
     def search_neighbors(self):
         for p_i in range(self.particle_num[None]):
             # Skip boundary particles
-            if self.material[p_i] == self.boundary:
+            if self.material[p_i] == self.material_boundary:
                 continue
             center_cell = self.pos_to_index(self.x[p_i])
             cnt = 0
@@ -116,7 +121,7 @@ class ParticleSystem:
                 for j in range(self.grid_particles_num[cell]):
                     p_j = self.grid_particles[cell, j]
                     distance = (self.x[p_i] - self.x[p_j]).norm()
-                    if p_i != p_j and distance < self.h:
+                    if p_i != p_j and distance < self.support_radius:
                         self.particle_neighbors[p_i, cnt] = p_j
                         cnt += 1
             self.particle_neighbors_num[p_i] = cnt
@@ -171,7 +176,7 @@ class ParticleSystem:
         for i in range(self.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
-                          self.dx))
+                          self.particle_radius))
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         assert self.particle_num[
