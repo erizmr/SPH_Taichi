@@ -6,14 +6,16 @@ from functools import reduce
 @ti.data_oriented
 class ParticleSystem:
     def __init__(self, res):
+        self.res = res
         self.dim = len(res)
         assert self.dim > 1
         self.screen_to_world_ratio = 50
+        self.bound = np.array(res) / self.screen_to_world_ratio
         # Material
         self.material_boundary = 0
         self.material_fluid = 1
 
-        self.particle_radius = 0.1  # particle radius
+        self.particle_radius = 0.05  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V = 0.8 * self.particle_diameter**self.dim
@@ -27,6 +29,7 @@ class ParticleSystem:
         self.grid_num = np.ceil(np.array(res) / self.grid_size).astype(int)
         self.grid_particles_num = ti.field(int)
         self.grid_particles = ti.field(int)
+        self.padding = self.grid_size
 
         # Particle related properties
         self.x = ti.Vector.field(self.dim, dtype=float)
@@ -100,9 +103,6 @@ class ParticleSystem:
             cell = self.pos_to_index(self.x[p])
             offset = self.grid_particles_num[cell].atomic_add(1)
             self.grid_particles[cell, offset] = p
-            # self.grid_particles_num[cell] += 1
-            # if p == 770:
-            #     print("p cell num ", p, cell, self.grid_particles_num[cell])
 
     @ti.kernel
     def search_neighbors(self):

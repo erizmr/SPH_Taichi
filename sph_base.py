@@ -7,7 +7,7 @@ class SPHBase:
     def __init__(self, particle_system):
         self.ps = particle_system
         self.g = -9.80  # Gravity
-        self.viscosity = 0.1  # viscosity
+        self.viscosity = 0.05  # viscosity
         self.density_0 = 1000.0  # reference density
         self.mass = self.ps.m_V * self.density_0
         self.CFL_v = 0.25  # CFL coefficient for velocity
@@ -62,16 +62,43 @@ class SPHBase:
     def pressure_force(self, p_i, p_j, r):
         # Compute the pressure force contribution, Symmetric Formula
         res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
-                         + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
+              + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
               * self.cubic_kernel_derivative(r)
         return res
 
     def substep(self):
         pass
 
+    @ti.func
+    def simulate_collisions(self, p_i, vec, d):
+        # Collision factor, assume roughly (1-c_f)*velocity loss after collision
+        c_f = 0.3
+        self.ps.x[p_i] += vec * d
+        self.ps.v[p_i] -= (
+            1.0 + c_f) * self.ps.v[p_i].dot(vec) * vec
+
     @ti.kernel
     def enforce_boundary(self):
-        pass
+        # TODO: only handle 2D case currently
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                pos = self.ps.x[p_i]
+                if pos[0] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([1.0, 0.0]),
+                        self.ps.padding - pos[0])
+                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([-1.0, 0.0]),
+                        pos[0] - (self.ps.bound[0] - self.ps.padding))
+                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, -1.0]),
+                        pos[1] - (self.ps.bound[1] - self.ps.padding))
+                if pos[1] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 1.0]),
+                       self.ps.padding - pos[1])
 
     def step(self):
         self.ps.initialize_particle_system()
@@ -99,12 +126,7 @@ class WCSPHSolver(SPHBase):
                 p_j = self.ps.particle_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 self.ps.density[p_i] += self.ps.m_V * self.cubic_kernel((x_i - x_j).norm())
-                # if  p_i == 25:
-                #     print("p_i  x_i p_j x_j", p_i, x_i, p_j, x_j,  self.cubic_kernel((x_i - x_j).norm()), self.ps.particle_neighbors_num[p_i])
             self.ps.density[p_i] *= self.density_0
-
-            # if p_i == 75 or p_i == 25:
-            #     print("p_i ", p_i, x_i, self.ps.density[p_i], self.ps.particle_neighbors_num[p_i])
 
     @ti.kernel
     def compute_pressure_forces(self):
@@ -123,7 +145,6 @@ class WCSPHSolver(SPHBase):
             self.d_velocity[p_i] += d_v
 
 
-
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
@@ -135,7 +156,6 @@ class WCSPHSolver(SPHBase):
                 if self.ps.material[p_i] == self.ps.material_fluid:
                     # Compute Viscosity force contribution
                     d_v += self.viscosity_force(p_i, p_j, x_i - x_j)
-                    pass
 
             # Add body force
             if self.ps.material[p_i] == self.ps.material_fluid:
