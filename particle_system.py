@@ -18,8 +18,8 @@ class ParticleSystem:
         self.particle_radius = 0.05  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
-        self.m_V = 0.8 * self.particle_diameter**self.dim
-        self.particle_max_num = 2**15
+        self.m_V = 0.8 * self.particle_diameter ** self.dim
+        self.particle_max_num = 2 ** 15
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
@@ -78,13 +78,13 @@ class ParticleSystem:
             for d in ti.static(range(self.dim)):
                 v[d] = new_particles_velocity[p - self.particle_num[None], d]
                 x[d] = new_particles_positions[p - self.particle_num[None], d]
-            self.add_particle(p, x, v, 
+            self.add_particle(p, x, v,
                               new_particle_density[p - self.particle_num[None]],
                               new_particle_pressure[p - self.particle_num[None]],
                               new_particles_material[p - self.particle_num[None]],
                               new_particles_color[p - self.particle_num[None]])
         self.particle_num[None] += new_particles_num
-    
+
     @ti.func
     def pos_to_index(self, pos):
         return (pos / self.grid_size).cast(int)
@@ -112,7 +112,7 @@ class ParticleSystem:
                 continue
             center_cell = self.pos_to_index(self.x[p_i])
             cnt = 0
-            for offset in ti.grouped(ti.ndrange(*((-1, 2), ) * self.dim)):
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
                 if cnt >= self.particle_max_num_neighbor:
                     break
                 cell = center_cell + offset
@@ -150,10 +150,10 @@ class ParticleSystem:
         np_v = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(np_v, self.v)
 
-        np_material = np.ndarray((self.particle_num[None], ), dtype=np.int32)
+        np_material = np.ndarray((self.particle_num[None],), dtype=np.int32)
         self.copy_to_numpy(np_material, self.material)
 
-        np_color = np.ndarray((self.particle_num[None], ), dtype=np.int32)
+        np_color = np.ndarray((self.particle_num[None],), dtype=np.int32)
         self.copy_to_numpy(np_color, self.color)
 
         return {
@@ -161,7 +161,7 @@ class ParticleSystem:
             'velocity': np_v,
             'material': np_material,
             'color': np_color
-            }
+        }
 
     def add_cube(self,
                  lower_corner,
@@ -180,14 +180,14 @@ class ParticleSystem:
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         assert self.particle_num[
-            None] + num_new_particles <= self.particle_max_num
+                   None] + num_new_particles <= self.particle_max_num
 
         new_positions = np.array(np.meshgrid(*num_dim,
                                              sparse=False,
                                              indexing='ij'),
                                  dtype=np.float32)
         new_positions = new_positions.reshape(-1,
-            reduce(lambda x, y: x * y, list(new_positions.shape[1:]))).transpose()
+                                              reduce(lambda x, y: x * y, list(new_positions.shape[1:]))).transpose()
         print("new position shape ", new_positions.shape)
         if velocity is None:
             velocity = np.full_like(new_positions, 0)
