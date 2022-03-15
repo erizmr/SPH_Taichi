@@ -1,4 +1,3 @@
-from tkinter import N
 import taichi as ti
 import numpy as np
 from functools import reduce
@@ -6,18 +5,18 @@ from functools import reduce
 
 @ti.data_oriented
 class ParticleSystem:
-    def __init__(self, res, GGUI=False):
+    def __init__(self, domain_size, GGUI=False):
         self.GGUI = GGUI
-        self.res = res
-        self.dim = len(res)
+        self.domain_size = domain_size
+        self.dim = len(domain_size)
         assert self.dim > 1
         self.screen_to_world_ratio = 50
-        self.bound = np.array(res) / self.screen_to_world_ratio
+        self.bound = self.domain_size #/ self.screen_to_world_ratio
         # Material
         self.material_boundary = 0
         self.material_fluid = 1
 
-        self.particle_radius = 0.05  # particle radius
+        self.particle_radius = 0.01  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V = 0.8 * self.particle_diameter ** self.dim
@@ -28,7 +27,8 @@ class ParticleSystem:
 
         # Grid related properties
         self.grid_size = self.support_radius
-        self.grid_num = np.ceil(np.array(res) / self.grid_size).astype(int)
+        self.grid_num = np.ceil(np.array(self.bound) / self.grid_size).astype(int)
+        print("grid size: ", self.grid_num)
         self.grid_particles_num = ti.field(int)
         self.grid_particles = ti.field(int)
         self.padding = self.grid_size
@@ -50,12 +50,21 @@ class ParticleSystem:
         self.particle_node.place(self.particle_neighbors)
 
         index = ti.ij if self.dim == 2 else ti.ijk
-        grid_node = ti.root.dense(index, self.grid_num)
-        grid_node.place(self.grid_particles_num)
+        if self.dim == 2:
+            self.grid_node = ti.root.dense(index, self.grid_num)
+            self.grid_node.place(self.grid_particles_num)
+        elif self.dim == 3:
+            # self.grid_node = ti.root.pointer(index, self.grid_num)
+            self.grid_node = ti.root.dense(index, self.grid_num)
+            self.grid_node.place(self.grid_particles_num)
 
         cell_index = ti.k if self.dim == 2 else ti.l
-        cell_node = grid_node.dense(cell_index, self.particle_max_num_per_cell)
-        cell_node.place(self.grid_particles)
+        if self.dim == 2:
+            cell_node = self.grid_node.dense(cell_index, self.particle_max_num_per_cell)
+            cell_node.place(self.grid_particles)
+        elif self.dim == 3:
+            self.grid_node.dense(cell_index, self.particle_max_num_per_cell).place(self.grid_particles)
+            # self.grid_node.dynamic(cell_index, self.particle_max_num_per_cell).place(self.grid_particles)
 
         self.x_vis_buffer = None
         if self.GGUI:
@@ -108,7 +117,7 @@ class ParticleSystem:
     def allocate_particles_to_grid(self):
         for p in range(self.particle_num[None]):
             cell = self.pos_to_index(self.x[p])
-            offset = self.grid_particles_num[cell].atomic_add(1)
+            offset = ti.atomic_add(self.grid_particles_num[cell], 1)
             self.grid_particles[cell, offset] = p
 
     @ti.kernel
@@ -154,7 +163,7 @@ class ParticleSystem:
     def copy_to_vis_buffer(self):
         assert self.GGUI
         for i in self.x:
-            self.x_vis_buffer[i] = self.x[i] * self.screen_to_world_ratio / self.res[0]
+            self.x_vis_buffer[i] = self.x[i] / self.domain_size[0]
 
     def dump(self):
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
@@ -192,6 +201,7 @@ class ParticleSystem:
                           self.particle_radius))
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
+        print('particle num ', num_new_particles)
         assert self.particle_num[
                    None] + num_new_particles <= self.particle_max_num
 

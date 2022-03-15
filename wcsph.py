@@ -30,7 +30,8 @@ class WCSPHSolver(SPHBase):
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
-                continue
+                # continue
+                self.d_velocity[p_i].fill(0)
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             for j in range(self.ps.particle_neighbors_num[p_i]):
@@ -38,17 +39,18 @@ class WCSPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 # Compute Pressure force contribution
                 d_v += self.pressure_force(p_i, p_j, x_i-x_j)
-            self.d_velocity[p_i] += d_v
+            # self.d_velocity[p_i] += d_v
 
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
-                continue
+                # continue
+                self.d_velocity[p_i].fill(0)
             x_i = self.ps.x[p_i]
             # Add body force
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            d_v[self.ps.dim-1] = self.g
+            d_v[1] = self.g
             for j in range(self.ps.particle_neighbors_num[p_i]):
                 p_j = self.ps.particle_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]

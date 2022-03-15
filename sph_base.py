@@ -90,29 +90,61 @@ class SPHBase:
             1.0 + c_f) * self.ps.v[p_i].dot(vec) * vec
 
     @ti.kernel
-    def enforce_boundary(self):
+    def enforce_boundary_2D(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.dim == 2:
-                if self.ps.material[p_i] == self.ps.material_fluid:
-                    pos = self.ps.x[p_i]
-                    if pos[0] < self.ps.padding:
-                        self.simulate_collisions(
-                            p_i, ti.Vector([1.0, 0.0]),
-                            self.ps.padding - pos[0])
-                    if pos[0] > self.ps.bound[0] - self.ps.padding:
-                        self.simulate_collisions(
-                            p_i, ti.Vector([-1.0, 0.0]),
-                            pos[0] - (self.ps.bound[0] - self.ps.padding))
-                    if pos[1] > self.ps.bound[1] - self.ps.padding:
-                        self.simulate_collisions(
-                            p_i, ti.Vector([0.0, -1.0]),
-                            pos[1] - (self.ps.bound[1] - self.ps.padding))
-                    if pos[1] < self.ps.padding:
-                        self.simulate_collisions(
-                            p_i, ti.Vector([0.0, 1.0]),
-                           self.ps.padding - pos[1])
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                pos = self.ps.x[p_i]
+                if pos[0] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([1.0, 0.0]),
+                        self.ps.padding - pos[0])
+                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([-1.0, 0.0]),
+                        pos[0] - (self.ps.bound[0] - self.ps.padding))
+                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, -1.0]),
+                        pos[1] - (self.ps.bound[1] - self.ps.padding))
+                if pos[1] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 1.0]),
+                        self.ps.padding - pos[1])
+
+    @ti.kernel
+    def enforce_boundary_3D(self):
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                pos = self.ps.x[p_i]
+                if pos[0] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([1.0, 0.0, 0.0]),
+                        self.ps.padding - pos[0])
+                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([-1.0, 0.0, 0.0]),
+                        pos[0] - (self.ps.bound[0] - self.ps.padding))
+                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, -1.0, 0.0]),
+                        pos[1] - (self.ps.bound[1] - self.ps.padding))
+                if pos[1] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 1.0, 0.0]),
+                        self.ps.padding - pos[1])
+                if pos[2] > self.ps.bound[2] - self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 0.0, -1.0]),
+                        pos[2] - (self.ps.bound[2] - self.ps.padding))
+                if pos[2] < self.ps.padding:
+                    self.simulate_collisions(
+                        p_i, ti.Vector([0.0, 0.0, 1.0]),
+                        self.ps.padding - pos[2])
 
     def step(self):
         self.ps.initialize_particle_system()
         self.substep()
-        self.enforce_boundary()
+        if self.ps.dim == 2:
+            self.enforce_boundary_2D()
+        elif self.ps.dim == 3:
+            self.enforce_boundary_3D()
