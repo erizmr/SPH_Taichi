@@ -1,3 +1,4 @@
+from tkinter import N
 import taichi as ti
 import numpy as np
 from functools import reduce
@@ -5,7 +6,8 @@ from functools import reduce
 
 @ti.data_oriented
 class ParticleSystem:
-    def __init__(self, res):
+    def __init__(self, res, GGUI=False):
+        self.GGUI = GGUI
         self.res = res
         self.dim = len(res)
         assert self.dim > 1
@@ -54,6 +56,11 @@ class ParticleSystem:
         cell_index = ti.k if self.dim == 2 else ti.l
         cell_node = grid_node.dense(cell_index, self.particle_max_num_per_cell)
         cell_node.place(self.grid_particles)
+
+        self.x_vis_buffer = None
+        if self.GGUI:
+            self.x_vis_buffer = ti.Vector.field(self.dim, dtype=float)
+            self.particles_node.place(self.x_vis_buffer)
 
     @ti.func
     def add_particle(self, p, x, v, density, pressure, material, color):
@@ -142,6 +149,12 @@ class ParticleSystem:
     def copy_to_numpy(self, np_arr: ti.ext_arr(), src_arr: ti.template()):
         for i in range(self.particle_num[None]):
             np_arr[i] = src_arr[i]
+
+    @ti.kernel
+    def copy_to_vis_buffer(self):
+        assert self.GGUI
+        for i in self.x:
+            self.x_vis_buffer[i] = self.x[i] * self.screen_to_world_ratio / self.res[0]
 
     def dump(self):
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)

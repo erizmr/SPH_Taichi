@@ -7,12 +7,12 @@ from wcsph import WCSPHSolver
 
 # Use GPU for higher peformance if available
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
-ti.init(arch=arch, device_memory_GB=3, packed=True)
+ti.init(arch=ti.cuda, device_memory_GB=3, packed=True)
 
 
 
 if __name__ == "__main__":
-    ps = ParticleSystem((512, 512))
+    ps = ParticleSystem((512, 512), GGUI=True)
 
     ps.add_cube(lower_corner=[6, 2],
                 cube_size=[3.0, 5.0],
@@ -43,11 +43,12 @@ if __name__ == "__main__":
     canvas = window.get_canvas()
     radius = 0.003
     background_color = (1, 1, 1)  # 0xFFFFFF
-    particle_color = (0, 0, 0.5)  # 0x956333
+    particle_color = (149 / 255, 99 / 255, 51 / 255)  # 0x956333
 
     while window.running:
         for i in range(5):
             wcsph_solver.step()
+        ps.copy_to_vis_buffer()
         canvas.set_background_color(background_color)
-        canvas.circles(ps.x, radius=radius, color=(0.93, 0.33, 0.23))
+        canvas.circles(ps.x_vis_buffer, radius=radius, color=particle_color)
         window.show()
