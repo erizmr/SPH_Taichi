@@ -20,7 +20,7 @@ class ParticleSystem:
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V = 0.8 * self.particle_diameter ** self.dim
-        self.particle_max_num = 2 ** 15
+        self.particle_max_num = 2 ** 18
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
@@ -132,8 +132,8 @@ class ParticleSystem:
                 if cnt >= self.particle_max_num_neighbor:
                     break
                 cell = center_cell + offset
-                if not self.is_valid_cell(cell):
-                    break
+                # if not self.is_valid_cell(cell):
+                #     break
                 for j in range(self.grid_particles_num[cell]):
                     p_j = self.grid_particles[cell, j]
                     distance = (self.x[p_i] - self.x[p_j]).norm()
@@ -198,7 +198,7 @@ class ParticleSystem:
         for i in range(self.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
-                          self.particle_radius))
+                          self.particle_diameter))
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         print('particle num ', num_new_particles)

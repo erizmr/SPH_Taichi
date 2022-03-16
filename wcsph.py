@@ -39,7 +39,7 @@ class WCSPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 # Compute Pressure force contribution
                 d_v += self.pressure_force(p_i, p_j, x_i-x_j)
-            # self.d_velocity[p_i] += d_v
+            self.d_velocity[p_i] += d_v
 
     @ti.kernel
     def compute_non_pressure_forces(self):

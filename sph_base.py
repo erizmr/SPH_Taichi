@@ -7,11 +7,11 @@ class SPHBase:
     def __init__(self, particle_system):
         self.ps = particle_system
         self.g = -9.80  # Gravity
-        self.viscosity = 0.05  # viscosity
+        self.viscosity = 0.01  # viscosity
         self.density_0 = 1000.0  # reference density
         self.mass = self.ps.m_V * self.density_0
         self.dt = ti.field(float, shape=())
-        self.dt[None] = 2e-4
+        self.dt[None] = 5e-4
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -76,6 +76,8 @@ class SPHBase:
         res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
               + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
               * self.cubic_kernel_derivative(r)
+        # if p_i == 100:
+        #     print("x ", self.ps.x[p_i], "v ", self.ps.v[p_i], " ", self.ps.pressure[p_i], " ", self.ps.density[p_i], " ", res)
         return res
 
     def substep(self):
@@ -84,62 +86,86 @@ class SPHBase:
     @ti.func
     def simulate_collisions(self, p_i, vec, d):
         # Collision factor, assume roughly (1-c_f)*velocity loss after collision
-        c_f = 0.3
-        self.ps.x[p_i] += vec * d
+        c_f = 0.5
+        # self.ps.x[p_i] += vec * d
         self.ps.v[p_i] -= (
             1.0 + c_f) * self.ps.v[p_i].dot(vec) * vec
+
 
     @ti.kernel
     def enforce_boundary_2D(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] == self.ps.material_fluid:
                 pos = self.ps.x[p_i]
-                if pos[0] < self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([1.0, 0.0]),
-                        self.ps.padding - pos[0])
+                # if pos[0] < self.ps.padding:
+                #     self.simulate_collisions(
+                #         p_i, ti.Vector([1.0, 0.0]),
+                #         self.ps.padding - pos[0])
+                # if pos[0] > self.ps.bound[0] - self.ps.padding:
+                #     self.simulate_collisions(
+                #         p_i, ti.Vector([-1.0, 0.0]),
+                #         pos[0] - (self.ps.bound[0] - self.ps.padding))
+                # if pos[1] > self.ps.bound[1] - self.ps.padding:
+                #     self.simulate_collisions(
+                #         p_i, ti.Vector([0.0, -1.0]),
+                #         pos[1] - (self.ps.bound[1] - self.ps.padding))
+                # if pos[1] < self.ps.padding:
+                #     self.simulate_collisions(
+                #         p_i, ti.Vector([0.0, 1.0]),
+                #         self.ps.padding - pos[1])
+                collision_normal = ti.Vector([0.0, 0.0])
                 if pos[0] > self.ps.bound[0] - self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([-1.0, 0.0]),
-                        pos[0] - (self.ps.bound[0] - self.ps.padding))
+                    collision_normal[0] += 1.0
+                    self.ps.x[p_i][0] = self.ps.bound[0] - self.ps.padding
+                if pos[0] <= self.ps.padding:
+                    collision_normal[0] += -1.0
+                    self.ps.x[p_i][0] = self.ps.padding
+
                 if pos[1] > self.ps.bound[1] - self.ps.padding:
+                    collision_normal[1] += 1.0
+                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                if pos[1] <= self.ps.padding:
+                    collision_normal[1] += -1.0
+                    self.ps.x[p_i][1] = self.ps.padding
+                collision_normal_length = collision_normal.norm()
+                if collision_normal_length > 1e-6:
                     self.simulate_collisions(
-                        p_i, ti.Vector([0.0, -1.0]),
-                        pos[1] - (self.ps.bound[1] - self.ps.padding))
-                if pos[1] < self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([0.0, 1.0]),
-                        self.ps.padding - pos[1])
+                            p_i, collision_normal / collision_normal_length,
+                            0.0)
 
     @ti.kernel
     def enforce_boundary_3D(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] == self.ps.material_fluid:
                 pos = self.ps.x[p_i]
-                if pos[0] < self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([1.0, 0.0, 0.0]),
-                        self.ps.padding - pos[0])
+                collision_normal = ti.Vector([0.0, 0.0, 0.0])
                 if pos[0] > self.ps.bound[0] - self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([-1.0, 0.0, 0.0]),
-                        pos[0] - (self.ps.bound[0] - self.ps.padding))
+                    collision_normal[0] += 1.0
+                    self.ps.x[p_i][0] = self.ps.bound[0] - self.ps.padding
+                if pos[0] <= self.ps.padding:
+                    collision_normal[0] += -1.0
+                    self.ps.x[p_i][0] = self.ps.padding
+
                 if pos[1] > self.ps.bound[1] - self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([0.0, -1.0, 0.0]),
-                        pos[1] - (self.ps.bound[1] - self.ps.padding))
-                if pos[1] < self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([0.0, 1.0, 0.0]),
-                        self.ps.padding - pos[1])
+                    collision_normal[1] += 1.0
+                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                if pos[1] <= self.ps.padding:
+                    collision_normal[1] += -1.0
+                    self.ps.x[p_i][1] = self.ps.padding
+
+
                 if pos[2] > self.ps.bound[2] - self.ps.padding:
+                    collision_normal[2] += 1.0
+                    self.ps.x[p_i][2] = self.ps.bound[2] - self.ps.padding
+                if pos[2] <= self.ps.padding:
+                    collision_normal[2] += -1.0
+                    self.ps.x[p_i][2] = self.ps.padding
+
+                collision_normal_length = collision_normal.norm()
+                if collision_normal_length > 1e-6:
                     self.simulate_collisions(
-                        p_i, ti.Vector([0.0, 0.0, -1.0]),
-                        pos[2] - (self.ps.bound[2] - self.ps.padding))
-                if pos[2] < self.ps.padding:
-                    self.simulate_collisions(
-                        p_i, ti.Vector([0.0, 0.0, 1.0]),
-                        self.ps.padding - pos[2])
+                            p_i, collision_normal / collision_normal_length,
+                            0.0)
 
     def step(self):
         self.ps.initialize_particle_system()

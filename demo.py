@@ -6,27 +6,27 @@ from wcsph import WCSPHSolver
 # ti.init(arch=ti.cpu)
 
 # Use GPU for higher peformance if available
-arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
+# arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.cuda, device_memory_fraction=0.8, packed=True) #, log_level=ti.TRACE)
 
 
 
 if __name__ == "__main__":
-    domain_size = 5
-    dim = 2
+    domain_size = 2
+    dim = 3
     ps = ParticleSystem((domain_size,)*dim, GGUI=True)
 
     if dim == 2:
-        ps.add_cube(lower_corner=[1, 1],
-                cube_size=[0.5, 0.5],
+        ps.add_cube(lower_corner=[0.3, 0.3],
+                cube_size=[0.4, 0.6],
                 velocity=[0.0, -5.0],
                 density=1000.0,
                 # color=0x956333,
                 material=1)
     elif dim == 3:
-        ps.add_cube(lower_corner=[1, 1, 1],
-                    cube_size=[0.2, 0.2, 0.2],
-                    velocity=[0.0, 0.0, 0.0],
+        ps.add_cube(lower_corner=[0.6, 0.6, 0.6],
+                    cube_size=[0.8, 1.3, 0.8],
+                    velocity=[0.0, -1.0, 0.0],
                     density=1000.0,
                     # color=0x956333,
                     material=1)
@@ -60,18 +60,20 @@ if __name__ == "__main__":
 
     scene = ti.ui.Scene()
     camera = ti.ui.make_camera()
-    camera.position(0.6, 0.5, 0.6)
+    camera.position(0.5, 1.0, 2.0)
     camera.up(0.0, 1.0, 0.0)
-    camera.lookat(0.2, 0.2, 0.2)
+    camera.lookat(0.5, 0.5, 0.5)
     camera.fov(60)
     scene.set_camera(camera)
 
     canvas = window.get_canvas()
-    radius = 0.001
+    radius = 0.002
     movement_speed = 0.02
-    background_color = (1, 1, 1)  # 0xFFFFFF
+    background_color = (0, 0, 0)  # 0xFFFFFF
     particle_color = (149 / 255, 99 / 255, 51 / 255)  # 0x956333
+    particle_color = (1, 1, 1)
 
+    cnt = 0
     while window.running:
         for i in range(5):
             # ps.grid_node.deactivate_all()
@@ -79,7 +81,7 @@ if __name__ == "__main__":
         ps.copy_to_vis_buffer()
         if ps.dim == 2:
             canvas.set_background_color(background_color)
-            canvas.circles(ps.x_vis_buffer, radius=radius, color=particle_color)
+            canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
         elif ps.dim == 3:
             # user controlling of camera
             position_change = ti.Vector([0.0, 0.0, 0.0])
@@ -95,6 +97,10 @@ if __name__ == "__main__":
             scene.set_camera(camera)
 
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
-            scene.particles(ps.x_vis_buffer, radius=radius, color=particle_color)
+            scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
             canvas.scene(scene)
+        
+        # if cnt % 20 == 0:
+        #     window.write_image(f"img_output/{cnt:04}.png")
+        cnt += 1
         window.show()
