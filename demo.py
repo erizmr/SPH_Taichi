@@ -1,12 +1,12 @@
 import taichi as ti
 import numpy as np
+import matplotlib.colors
 from particle_system import ParticleSystem
 from wcsph import WCSPHSolver
 
 # ti.init(arch=ti.cpu)
 
 # Use GPU for higher peformance if available
-# arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.cuda, device_memory_fraction=0.8, packed=True) #, log_level=ti.TRACE)
 
 
@@ -18,32 +18,31 @@ if __name__ == "__main__":
 
     if dim == 2:
         ps.add_cube(lower_corner=[0.3, 0.3],
-                cube_size=[0.4, 0.6],
-                velocity=[0.0, -5.0],
-                density=1000.0,
-                # color=0x956333,
-                material=1)
+                    cube_size=[0.8, 1.6],
+                    velocity=[0.0, -5.0],
+                    density=1000.0,
+                    color=0x956333,
+                    material=1)
+        ps.add_cube(lower_corner=[0.0, 0.0],
+                    cube_size=[2.0, 0.025],
+                    velocity=[0.0, 0.0],
+                    density=1000.0,
+                    color=0x956333,
+                    material=0)
+
     elif dim == 3:
         ps.add_cube(lower_corner=[0.6, 0.6, 0.6],
                     cube_size=[0.8, 1.3, 0.8],
                     velocity=[0.0, -1.0, 0.0],
                     density=1000.0,
-                    # color=0x956333,
+                    color=(177,213,200),
                     material=1)
-
-        # ps.add_cube(lower_corner=[1, 1.2, 1],
-        #             cube_size=[0.1, 0.1, 0.1],
-        #             velocity=[0.0, 2.0, 0.0],
-        #             density=1000.0,
-        #             # color=0x956333,
-        #             material=1)
-
-    # ps.add_cube(lower_corner=[3, 1, 1],
-    #             cube_size=[2.0, 6.0, 1.0],
-    #             velocity=[0.0, -20.0, 0.0],
-    #             density=1000.0,
-    #             # color=0x956333,
-    #             material=1)
+        ps.add_cube(lower_corner=[0.0, 0.0, 0.0],
+                    cube_size=[2.0, 0.025, 2.0],
+                    velocity=[0.0, 0.0, 0.0],
+                    density=1000.0,
+                    color=(0,0,0),
+                    material=0)
 
     wcsph_solver = WCSPHSolver(ps)
     # gui = ti.GUI(background_color=0xFFFFFF)
@@ -56,7 +55,7 @@ if __name__ == "__main__":
     #                 color=0x956333)
     #     gui.show()
 
-    window = ti.ui.Window('Window Title', (1024, 1024), show_window = True)
+    window = ti.ui.Window('SPH', (1024, 1024), show_window = True)
 
     scene = ti.ui.Scene()
     camera = ti.ui.make_camera()
@@ -70,18 +69,17 @@ if __name__ == "__main__":
     radius = 0.002
     movement_speed = 0.02
     background_color = (0, 0, 0)  # 0xFFFFFF
-    particle_color = (149 / 255, 99 / 255, 51 / 255)  # 0x956333
     particle_color = (1, 1, 1)
 
     cnt = 0
+    wcsph_solver.update_boundary_volume()
     while window.running:
         for i in range(5):
-            # ps.grid_node.deactivate_all()
             wcsph_solver.step()
         ps.copy_to_vis_buffer()
         if ps.dim == 2:
             canvas.set_background_color(background_color)
-            canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
+            canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius / 5, color=particle_color)
         elif ps.dim == 3:
             # user controlling of camera
             position_change = ti.Vector([0.0, 0.0, 0.0])
@@ -97,7 +95,7 @@ if __name__ == "__main__":
             scene.set_camera(camera)
 
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
-            scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
+            scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
             canvas.scene(scene)
         
         # if cnt % 20 == 0:

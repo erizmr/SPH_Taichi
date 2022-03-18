@@ -16,7 +16,7 @@ class ParticleSystem:
         self.material_boundary = 0
         self.material_fluid = 1
 
-        self.particle_radius = 0.025  # particle radius
+        self.particle_radius = 0.01  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
@@ -40,7 +40,7 @@ class ParticleSystem:
         self.density = ti.field(dtype=float)
         self.pressure = ti.field(dtype=float)
         self.material = ti.field(dtype=int)
-        self.color = ti.field(dtype=int)
+        self.color = ti.Vector.field(3, dtype=int)
 
         # Neighbors information
         self.fluid_neighbors = ti.field(int)
@@ -76,7 +76,8 @@ class ParticleSystem:
         self.x_vis_buffer = None
         if self.GGUI:
             self.x_vis_buffer = ti.Vector.field(self.dim, dtype=float)
-            self.particles_node.place(self.x_vis_buffer)
+            self.color_vis_buffer = ti.Vector.field(3, dtype=float)
+            self.particles_node.place(self.x_vis_buffer, self.color_vis_buffer)
 
     @ti.func
     def add_particle(self, p, x, v, density, pressure, material, color):
@@ -106,7 +107,7 @@ class ParticleSystem:
                               new_particle_density[p - self.particle_num[None]],
                               new_particle_pressure[p - self.particle_num[None]],
                               new_particles_material[p - self.particle_num[None]],
-                              new_particles_color[p - self.particle_num[None]])
+                              ti.Vector([new_particles_color[p - self.particle_num[None], i] for i in range(3)]))
         self.particle_num[None] += new_particles_num
 
     @ti.func
@@ -173,8 +174,9 @@ class ParticleSystem:
     def copy_to_vis_buffer(self):
         assert self.GGUI
         for i in self.x:
-            if self.material[i] == self.material_fluid:
-                self.x_vis_buffer[i] = self.x[i] / self.domain_size[0]
+            # if self.material[i] == self.material_fluid:
+            self.x_vis_buffer[i] = self.x[i] / self.domain_size[0]
+            self.color_vis_buffer[i] = self.color[i] / 255
 
     def dump(self):
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
@@ -200,7 +202,7 @@ class ParticleSystem:
                  lower_corner,
                  cube_size,
                  material,
-                 color=0xFFFFFF,
+                 color=(0,0,0),
                  density=None,
                  pressure=None,
                  velocity=None):
@@ -229,7 +231,8 @@ class ParticleSystem:
             velocity = np.array([velocity for _ in range(num_new_particles)], dtype=np.float32)
 
         material = np.full_like(np.zeros(num_new_particles), material)
-        color = np.full_like(np.zeros(num_new_particles), color)
+        color = np.stack([np.full_like(np.zeros(num_new_particles), c) for c in color], axis=1)
+        print(color.shape)
         density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
         pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
         self.add_particles(num_new_particles, new_positions, velocity, density, pressure, material, color)
