@@ -11,15 +11,15 @@ class ParticleSystem:
         self.dim = len(domain_size)
         assert self.dim > 1
         self.screen_to_world_ratio = 50
-        self.bound = self.domain_size #/ self.screen_to_world_ratio
+        self.bound = self.domain_size # self.screen_to_world_ratio
         # Material
         self.material_boundary = 0
         self.material_fluid = 1
 
-        self.particle_radius = 0.01  # particle radius
+        self.particle_radius = 0.025  # particle radius
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
-        self.m_V = 0.8 * self.particle_diameter ** self.dim
+        self.m_V0 = 0.8 * self.particle_diameter ** self.dim
         self.particle_max_num = 2 ** 18
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
@@ -36,18 +36,25 @@ class ParticleSystem:
         # Particle related properties
         self.x = ti.Vector.field(self.dim, dtype=float)
         self.v = ti.Vector.field(self.dim, dtype=float)
+        self.m_V = ti.field(dtype=float)
         self.density = ti.field(dtype=float)
         self.pressure = ti.field(dtype=float)
         self.material = ti.field(dtype=int)
         self.color = ti.field(dtype=int)
-        self.particle_neighbors = ti.field(int)
-        self.particle_neighbors_num = ti.field(int)
 
+        # Neighbors information
+        self.fluid_neighbors = ti.field(int)
+        self.fluid_neighbors_num = ti.field(int)
+
+        self.boundary_neighbors = ti.field(int)
+        self.boundary_neighbors_num = ti.field(int)
+
+        # Allocate memory
         self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
-        self.particles_node.place(self.x, self.v, self.density, self.pressure, self.material, self.color)
-        self.particles_node.place(self.particle_neighbors_num)
+        self.particles_node.place(self.x, self.v, self.density, self.m_V, self.pressure, self.material, self.color)
+        self.particles_node.place(self.fluid_neighbors_num, self.boundary_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
-        self.particle_node.place(self.particle_neighbors)
+        self.particle_node.place(self.fluid_neighbors, self.boundary_neighbors)
 
         index = ti.ij if self.dim == 2 else ti.ijk
         if self.dim == 2:
@@ -76,6 +83,7 @@ class ParticleSystem:
         self.x[p] = x
         self.v[p] = v
         self.density[p] = density
+        self.m_V[p] = self.m_V0
         self.pressure[p] = pressure
         self.material[p] = material
         self.color[p] = color
@@ -123,28 +131,30 @@ class ParticleSystem:
     @ti.kernel
     def search_neighbors(self):
         for p_i in range(self.particle_num[None]):
-            # Skip boundary particles
-            if self.material[p_i] == self.material_boundary:
-                continue
             center_cell = self.pos_to_index(self.x[p_i])
-            cnt = 0
+            cnt_fluid = 0
+            cnt_boundary = 0
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
-                if cnt >= self.particle_max_num_neighbor:
+                if cnt_fluid + cnt_boundary >= self.particle_max_num_neighbor:
                     break
                 cell = center_cell + offset
-                # if not self.is_valid_cell(cell):
-                #     break
                 for j in range(self.grid_particles_num[cell]):
                     p_j = self.grid_particles[cell, j]
                     distance = (self.x[p_i] - self.x[p_j]).norm()
                     if p_i != p_j and distance < self.support_radius:
-                        self.particle_neighbors[p_i, cnt] = p_j
-                        cnt += 1
-            self.particle_neighbors_num[p_i] = cnt
+                        if self.material[p_j] == self.material_fluid:
+                            self.fluid_neighbors[p_i, cnt_fluid] = p_j
+                            cnt_fluid += 1
+                        elif self.material[p_j] == self.material_boundary:
+                            self.boundary_neighbors[p_i, cnt_boundary] = p_j
+                            cnt_boundary += 1
+            self.fluid_neighbors_num[p_i] = cnt_fluid
+            self.boundary_neighbors_num[p_i] = cnt_boundary
 
     def initialize_particle_system(self):
         self.grid_particles_num.fill(0)
-        self.particle_neighbors.fill(-1)
+        self.fluid_neighbors.fill(-1)
+        self.boundary_neighbors.fill(-1)
         self.allocate_particles_to_grid()
         self.search_neighbors()
 
@@ -163,7 +173,8 @@ class ParticleSystem:
     def copy_to_vis_buffer(self):
         assert self.GGUI
         for i in self.x:
-            self.x_vis_buffer[i] = self.x[i] / self.domain_size[0]
+            if self.material[i] == self.material_fluid:
+                self.x_vis_buffer[i] = self.x[i] / self.domain_size[0]
 
     def dump(self):
         np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)

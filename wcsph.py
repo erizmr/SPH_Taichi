@@ -15,44 +15,72 @@ class WCSPHSolver(SPHBase):
     @ti.kernel
     def compute_densities(self):
         for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] != self.ps.material_fluid:
+                continue
             x_i = self.ps.x[p_i]
-            self.ps.density[p_i] = 0.0
-            for j in range(self.ps.particle_neighbors_num[p_i]):
-                p_j = self.ps.particle_neighbors[p_i, j]
+            self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
+            # Fluid neighbors
+            for j in range(self.ps.fluid_neighbors_num[p_i]):
+                p_j = self.ps.fluid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
-                self.ps.density[p_i] += self.ps.m_V * self.cubic_kernel((x_i - x_j).norm())
+                self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+            # Boundary neighbors
+            ## Akinci2012
+            for j in range(self.ps.boundary_neighbors_num[p_i]):
+                p_j = self.ps.boundary_neighbors[p_i, j]
+                x_j = self.ps.x[p_j]
+                self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
             self.ps.density[p_i] *= self.density_0
+
 
     @ti.kernel
     def compute_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] != self.ps.material_fluid:
+                continue
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
-                # continue
                 self.d_velocity[p_i].fill(0)
+                continue
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            for j in range(self.ps.particle_neighbors_num[p_i]):
-                p_j = self.ps.particle_neighbors[p_i, j]
+
+            dpi = self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
+            # Fluid neighbors
+            for j in range(self.ps.fluid_neighbors_num[p_i]):
+                p_j = self.ps.fluid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
-                # Compute Pressure force contribution
-                d_v += self.pressure_force(p_i, p_j, x_i-x_j)
+                dpj = self.ps.pressure[p_j] / self.ps.density[p_j] ** 2
+                # Compute the pressure force contribution, Symmetric Formula
+                d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
+                    * self.cubic_kernel_derivative(x_i-x_j)
+            
+            # Boundary neighbors
+            dpj = self.ps.pressure[p_i] / self.density_0 ** 2
+            ## Akinci2012
+            for j in range(self.ps.boundary_neighbors_num[p_i]):
+                p_j = self.ps.boundary_neighbors[p_i, j]
+                x_j = self.ps.x[p_j]
+                # Compute the pressure force contribution, Symmetric Formula
+                d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
+                    * self.cubic_kernel_derivative(x_i-x_j)
+
             self.d_velocity[p_i] += d_v
 
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
-                # continue
                 self.d_velocity[p_i].fill(0)
+                continue
             x_i = self.ps.x[p_i]
             # Add body force
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             d_v[1] = self.g
-            for j in range(self.ps.particle_neighbors_num[p_i]):
-                p_j = self.ps.particle_neighbors[p_i, j]
+            for j in range(self.ps.fluid_neighbors_num[p_i]):
+                p_j = self.ps.fluid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 d_v += self.viscosity_force(p_i, p_j, x_i - x_j)
             self.d_velocity[p_i] = d_v

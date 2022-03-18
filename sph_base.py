@@ -9,9 +9,9 @@ class SPHBase:
         self.g = -9.80  # Gravity
         self.viscosity = 0.01  # viscosity
         self.density_0 = 1000.0  # reference density
-        self.mass = self.ps.m_V * self.density_0
+        self.mass = self.ps.m_V0 * self.density_0
         self.dt = ti.field(float, shape=())
-        self.dt[None] = 5e-4
+        self.dt[None] = 2e-4
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -70,14 +70,32 @@ class SPHBase:
                 r)
         return res
 
-    @ti.func
-    def pressure_force(self, p_i, p_j, r):
-        # Compute the pressure force contribution, Symmetric Formula
-        res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
-              + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
-              * self.cubic_kernel_derivative(r)
-        return res
-
+    # @ti.func
+    # def pressure_force(self, p_i, p_j, r):
+    #     # Compute the pressure force contribution, Symmetric Formula
+    #     res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
+    #           + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
+    #           * self.cubic_kernel_derivative(r)
+    #     return res
+    
+    
+    def update_boundary_volume(self):
+        self.ps.initialize_particle_system()
+        self.compute_boundary_volume()
+    
+    @ti.kernel
+    def compute_boundary_volume(self):
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] != self.ps.material_boundary:
+                continue
+            x_i = self.ps.x[p_i]
+            delta = self.cubic_kernel(0.0)
+            for j in range(self.ps.boundary_neighbors_num[p_i]):
+                p_j = self.ps.boundary_neighbors[p_i, j]
+                x_j = self.ps.x[p_j]
+                delta += self.cubic_kernel((x_i - x_j).norm())
+            self.ps.m_V[p_i] = 1.0 / delta * 3.0 # TODO: the 3.0 here is the confficient for missing particles
+            # print(self.ps.m_V0, " ", self.ps.m_V[p_i])
     def substep(self):
         pass
 
@@ -101,12 +119,12 @@ class SPHBase:
                     collision_normal[0] += -1.0
                     self.ps.x[p_i][0] = self.ps.padding
 
-                if pos[1] > self.ps.bound[1] - self.ps.padding:
-                    collision_normal[1] += 1.0
-                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
-                if pos[1] <= self.ps.padding:
-                    collision_normal[1] += -1.0
-                    self.ps.x[p_i][1] = self.ps.padding
+                # if pos[1] > self.ps.bound[1] - self.ps.padding:
+                #     collision_normal[1] += 1.0
+                #     self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                # if pos[1] <= self.ps.padding:
+                #     collision_normal[1] += -1.0
+                #     self.ps.x[p_i][1] = self.ps.padding
                 collision_normal_length = collision_normal.norm()
                 if collision_normal_length > 1e-6:
                     self.simulate_collisions(
@@ -125,12 +143,12 @@ class SPHBase:
                     collision_normal[0] += -1.0
                     self.ps.x[p_i][0] = self.ps.padding
 
-                if pos[1] > self.ps.bound[1] - self.ps.padding:
-                    collision_normal[1] += 1.0
-                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
-                if pos[1] <= self.ps.padding:
-                    collision_normal[1] += -1.0
-                    self.ps.x[p_i][1] = self.ps.padding
+                # if pos[1] > self.ps.bound[1] - self.ps.padding:
+                #     collision_normal[1] += 1.0
+                #     self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                # if pos[1] <= self.ps.padding:
+                #     collision_normal[1] += -1.0
+                #     self.ps.x[p_i][1] = self.ps.padding
 
 
                 if pos[2] > self.ps.bound[2] - self.ps.padding:
