@@ -31,17 +31,35 @@ if __name__ == "__main__":
                     material=0)
 
     elif dim == 3:
-        ps.add_cube(lower_corner=[0.6, 0.6, 0.6],
-                    cube_size=[0.8, 1.3, 0.8],
+        # Fluid -1 
+        ps.add_cube(lower_corner=[0.6, 1.2, 0.6],
+                    cube_size=[0.4, 0.6, 0.4],
                     velocity=[0.0, -1.0, 0.0],
                     density=1000.0,
                     color=(177,213,200),
                     material=1)
-        ps.add_cube(lower_corner=[0.0, 0.0, 0.0],
-                    cube_size=[2.0, 0.025, 2.0],
+
+        # Fluid -2 
+        ps.add_cube(lower_corner=[1.2, 1.0, 1.2],
+                    cube_size=[0.4, 0.6, 0.4],
+                    velocity=[0.0, -1.0, 0.0],
+                    density=1000.0,
+                    color=(255,177,27),
+                    material=1)
+        # Boundary -1
+        ps.add_cube(lower_corner=[0.6, 0.025, 0.6],
+                    cube_size=[0.4, 0.2, 0.4],
                     velocity=[0.0, 0.0, 0.0],
                     density=1000.0,
-                    color=(0,0,0),
+                    color=(255,255,255),
+                    material=0)
+
+        # Bottom boundary
+        ps.add_cube(lower_corner=[0.0, 0.0, 0.0],
+                    cube_size=[2.0, ps.particle_diameter, 2.0],
+                    velocity=[0.0, 0.0, 0.0],
+                    density=1000.0,
+                    color=(255,255,255),
                     material=0)
 
     wcsph_solver = WCSPHSolver(ps)
@@ -55,7 +73,7 @@ if __name__ == "__main__":
     #                 color=0x956333)
     #     gui.show()
 
-    window = ti.ui.Window('SPH', (1024, 1024), show_window = True)
+    window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=True)
 
     scene = ti.ui.Scene()
     camera = ti.ui.make_camera()
