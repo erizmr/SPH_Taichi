@@ -70,19 +70,10 @@ class SPHBase:
                 r)
         return res
 
-    # @ti.func
-    # def pressure_force(self, p_i, p_j, r):
-    #     # Compute the pressure force contribution, Symmetric Formula
-    #     res = -self.density_0 * self.ps.m_V * (self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
-    #           + self.ps.pressure[p_j] / self.ps.density[p_j] ** 2) \
-    #           * self.cubic_kernel_derivative(r)
-    #     return res
-    
-    
-    def update_boundary_volume(self):
+    def initialize_sovler(self):
         self.ps.initialize_particle_system()
         self.compute_boundary_volume()
-    
+
     @ti.kernel
     def compute_boundary_volume(self):
         for p_i in range(self.ps.particle_num[None]):

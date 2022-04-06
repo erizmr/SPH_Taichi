@@ -1,19 +1,18 @@
 import taichi as ti
 import numpy as np
-import matplotlib.colors
 from particle_system import ParticleSystem
 from wcsph import WCSPHSolver
 
 # ti.init(arch=ti.cpu)
 
 # Use GPU for higher peformance if available
-ti.init(arch=ti.cuda, device_memory_fraction=0.8, packed=True) #, log_level=ti.TRACE)
+ti.init(arch=ti.vulkan, device_memory_fraction=0.8, packed=True) #, log_level=ti.TRACE)
 
 
 
 if __name__ == "__main__":
     domain_size = 2
-    dim = 3
+    dim = 2
     ps = ParticleSystem((domain_size,)*dim, GGUI=True)
 
     if dim == 2:
@@ -21,19 +20,19 @@ if __name__ == "__main__":
                     cube_size=[0.8, 1.6],
                     velocity=[0.0, -5.0],
                     density=1000.0,
-                    color=0x956333,
+                    color=(177,213,200),
                     material=1)
         ps.add_cube(lower_corner=[0.0, 0.0],
                     cube_size=[2.0, 0.025],
                     velocity=[0.0, 0.0],
                     density=1000.0,
-                    color=0x956333,
+                    color=(255,255,255),
                     material=0)
 
     elif dim == 3:
         # Fluid -1 
-        ps.add_cube(lower_corner=[0.6, 1.2, 0.6],
-                    cube_size=[0.4, 0.6, 0.4],
+        ps.add_cube(lower_corner=[0.6, 0.1, 0.6],
+                    cube_size=[0.6, 1.8, 0.6],
                     velocity=[0.0, -1.0, 0.0],
                     density=1000.0,
                     color=(177,213,200),
@@ -47,12 +46,12 @@ if __name__ == "__main__":
                     color=(255,177,27),
                     material=1)
         # Boundary -1
-        ps.add_cube(lower_corner=[0.6, 0.025, 0.6],
-                    cube_size=[0.4, 0.2, 0.4],
-                    velocity=[0.0, 0.0, 0.0],
-                    density=1000.0,
-                    color=(255,255,255),
-                    material=0)
+        # ps.add_cube(lower_corner=[0.6, 0.025, 0.6],
+        #             cube_size=[0.4, 0.2, 0.4],
+        #             velocity=[0.0, 0.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,255,255),
+        #             material=0)
 
         # Bottom boundary
         ps.add_cube(lower_corner=[0.0, 0.0, 0.0],
@@ -90,7 +89,7 @@ if __name__ == "__main__":
     particle_color = (1, 1, 1)
 
     cnt = 0
-    wcsph_solver.update_boundary_volume()
+    wcsph_solver.initialize_sovler()
     while window.running:
         for i in range(5):
             wcsph_solver.step()
