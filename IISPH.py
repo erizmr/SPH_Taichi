@@ -1,12 +1,13 @@
 import taichi as ti
 from sph_base import SPHBase
 
-class WCSPHSolver(SPHBase):
+
+class IISPHSolver(SPHBase):
     def __init__(self, particle_system):
         super().__init__(particle_system)
-        # Pressure state function parameters(WCSPH)
-        self.exponent = 7.0
-        self.stiffness = 50.0
+        # # Pressure state function parameters(WCSPH)
+        # self.exponent = 7.0
+        # self.stiffness = 50.0
 
         self.d_velocity = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
@@ -32,14 +33,14 @@ class WCSPHSolver(SPHBase):
                 self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
             self.ps.density[p_i] *= self.density_0
 
-
     @ti.kernel
     def compute_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
-            self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
+            self.ps.pressure[p_i] = self.stiffness * (
+                        ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 self.d_velocity[p_i].fill(0)
@@ -55,8 +56,8 @@ class WCSPHSolver(SPHBase):
                 dpj = self.ps.pressure[p_j] / self.ps.density[p_j] ** 2
                 # Compute the pressure force contribution, Symmetric Formula
                 d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                    * self.cubic_kernel_derivative(x_i-x_j)
-            
+                       * self.cubic_kernel_derivative(x_i - x_j)
+
             # Boundary neighbors
             dpj = self.ps.pressure[p_i] / self.density_0 ** 2
             ## Akinci2012
@@ -65,7 +66,7 @@ class WCSPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 # Compute the pressure force contribution, Symmetric Formula
                 d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                    * self.cubic_kernel_derivative(x_i-x_j)
+                       * self.cubic_kernel_derivative(x_i - x_j)
 
             self.d_velocity[p_i] += d_v
 

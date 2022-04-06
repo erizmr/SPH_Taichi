@@ -1,7 +1,7 @@
 import taichi as ti
 import numpy as np
 from particle_system import ParticleSystem
-from wcsph import WCSPHSolver
+from WCSPH import WCSPHSolver
 
 # ti.init(arch=ti.cpu)
 
@@ -13,6 +13,8 @@ ti.init(arch=ti.vulkan, device_memory_fraction=0.8, packed=True) #, log_level=ti
 if __name__ == "__main__":
     domain_size = 2
     dim = 2
+    substeps = 5
+    output_frames = False
     ps = ParticleSystem((domain_size,)*dim, GGUI=True)
 
     if dim == 2:
@@ -89,9 +91,9 @@ if __name__ == "__main__":
     particle_color = (1, 1, 1)
 
     cnt = 0
-    wcsph_solver.initialize_sovler()
+    wcsph_solver.initialize_solver()
     while window.running:
-        for i in range(5):
+        for i in range(substeps):
             wcsph_solver.step()
         ps.copy_to_vis_buffer()
         if ps.dim == 2:
@@ -114,8 +116,9 @@ if __name__ == "__main__":
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
             canvas.scene(scene)
-        
-        # if cnt % 20 == 0:
-        #     window.write_image(f"img_output/{cnt:04}.png")
+
+        if output_frames:
+            if cnt % 20 == 0:
+                window.write_image(f"img_output/{cnt:04}.png")
         cnt += 1
         window.show()

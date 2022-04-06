@@ -70,7 +70,7 @@ class SPHBase:
                 r)
         return res
 
-    def initialize_sovler(self):
+    def initialize_solver(self):
         self.ps.initialize_particle_system()
         self.compute_boundary_volume()
 
@@ -85,8 +85,9 @@ class SPHBase:
                 p_j = self.ps.boundary_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 delta += self.cubic_kernel((x_i - x_j).norm())
-            self.ps.m_V[p_i] = 1.0 / delta * 3.0 # TODO: the 3.0 here is the confficient for missing particles
+            self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
             # print(self.ps.m_V0, " ", self.ps.m_V[p_i])
+
     def substep(self):
         pass
 
