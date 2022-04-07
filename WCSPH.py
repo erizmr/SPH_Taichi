@@ -52,7 +52,8 @@ class WCSPHSolver(SPHBase):
             for j in range(self.ps.fluid_neighbors_num[p_i]):
                 p_j = self.ps.fluid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
-                dpj = self.ps.pressure[p_j] / self.ps.density[p_j] ** 2
+                density_j = self.ps.density[p_j] * self.density_0 / self.density_0  # TODO: The density_0 of the neighbor may be different when the fluid density is different
+                dpj = self.ps.pressure[p_j] / (density_j * density_j)
                 # Compute the pressure force contribution, Symmetric Formula
                 d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
                     * self.cubic_kernel_derivative(x_i-x_j)

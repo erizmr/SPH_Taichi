@@ -2,6 +2,7 @@ import taichi as ti
 import numpy as np
 from particle_system import ParticleSystem
 from WCSPH import WCSPHSolver
+from IISPH import IISPHSolver
 
 # ti.init(arch=ti.cpu)
 
@@ -15,6 +16,8 @@ if __name__ == "__main__":
     dim = 2
     substeps = 5
     output_frames = False
+    # solver_type = "WCSPH"
+    solver_type = "IISPH"
     ps = ParticleSystem((domain_size,)*dim, GGUI=True)
 
     if dim == 2:
@@ -63,16 +66,11 @@ if __name__ == "__main__":
                     color=(255,255,255),
                     material=0)
 
-    wcsph_solver = WCSPHSolver(ps)
-    # gui = ti.GUI(background_color=0xFFFFFF)
-    # while gui.running:
-    #     for i in range(5):
-    #         wcsph_solver.step()
-    #     particle_info = ps.dump()
-    #     gui.circles(particle_info['position'] * ps.screen_to_world_ratio / 512,
-    #                 radius=ps.particle_radius / 1.5 * ps.screen_to_world_ratio,
-    #                 color=0x956333)
-    #     gui.show()
+    if solver_type == "WCSPH":
+        solver = WCSPHSolver(ps)
+    elif solver_type == "IISPH":
+        solver = IISPHSolver(ps)
+
 
     window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=True)
 
@@ -91,10 +89,10 @@ if __name__ == "__main__":
     particle_color = (1, 1, 1)
 
     cnt = 0
-    wcsph_solver.initialize_solver()
+    solver.initialize_solver()
     while window.running:
         for i in range(substeps):
-            wcsph_solver.step()
+            solver.step()
         ps.copy_to_vis_buffer()
         if ps.dim == 2:
             canvas.set_background_color(background_color)
