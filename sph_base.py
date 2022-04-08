@@ -11,7 +11,7 @@ class SPHBase:
         self.density_0 = 1000.0  # reference density
         self.mass = self.ps.m_V0 * self.density_0
         self.dt = ti.field(float, shape=())
-        self.dt[None] = 2e-4
+        self.dt[None] = 1e-4
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -111,12 +111,12 @@ class SPHBase:
                     collision_normal[0] += -1.0
                     self.ps.x[p_i][0] = self.ps.padding
 
-                # if pos[1] > self.ps.bound[1] - self.ps.padding:
-                #     collision_normal[1] += 1.0
-                #     self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
-                # if pos[1] <= self.ps.padding:
-                #     collision_normal[1] += -1.0
-                #     self.ps.x[p_i][1] = self.ps.padding
+                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                    collision_normal[1] += 1.0
+                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                if pos[1] <= self.ps.padding:
+                    collision_normal[1] += -1.0
+                    self.ps.x[p_i][1] = self.ps.padding
                 collision_normal_length = collision_normal.norm()
                 if collision_normal_length > 1e-6:
                     self.simulate_collisions(
@@ -158,7 +158,7 @@ class SPHBase:
     def step(self):
         self.ps.initialize_particle_system()
         self.substep()
-        if self.ps.dim == 2:
-            self.enforce_boundary_2D()
-        elif self.ps.dim == 3:
-            self.enforce_boundary_3D()
+        # if self.ps.dim == 2:
+        #     self.enforce_boundary_2D()
+        # elif self.ps.dim == 3:
+        #     self.enforce_boundary_3D()

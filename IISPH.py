@@ -15,6 +15,7 @@ class IISPHSolver(SPHBase):
         self.pressure_accel = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
         particle_node.place(self.d_velocity, self.pressure_accel)
+        self.dt[None] = 1e-3
 
     @ti.kernel
     def predict_advection(self):
@@ -24,8 +25,9 @@ class IISPHSolver(SPHBase):
             sum_neighbor = 0.0
             sum_neighbor_of_neighbor = 0.0
             m_Vi = self.ps.m_V[p_i]
-            density_i = self.ps.density[p_i] / self.density_0
+            density_i = self.ps.density[p_i]
             density_i2 = density_i * density_i
+            density_02 = self.density_0 * self.density_0
             self.a_ii[p_i] = 0.0
             # Fluid neighbors
             for j in range(self.ps.fluid_neighbors_num[p_i]):
@@ -33,7 +35,7 @@ class IISPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 sum_neighbor_inner = ti.Vector([0.0 for _ in range(self.ps.dim)])
                 for k in range(self.ps.fluid_neighbors_num[p_i]):
-                    density_k = self.ps.density[k] / self.density_0
+                    density_k = self.ps.density[k]
                     density_k2 = density_k * density_k
                     p_k = self.ps.fluid_neighbors[p_i, j]
                     x_k = self.ps.x[p_k]
@@ -44,7 +46,7 @@ class IISPHSolver(SPHBase):
 
                 sum_neighbor_of_neighbor -= (self.ps.m_V[p_j] * kernel_grad_ij).dot(kernel_grad_ij)
             sum_neighbor_of_neighbor *= m_Vi / density_i2
-            self.a_ii[p_i] += (sum_neighbor + sum_neighbor_of_neighbor) * self.dt[None] * self.dt[None]
+            self.a_ii[p_i] += (sum_neighbor + sum_neighbor_of_neighbor) * self.dt[None] * self.dt[None] * density_02
 
             # Boundary neighbors
             ## Akinci2012
@@ -52,8 +54,8 @@ class IISPHSolver(SPHBase):
                 p_j = self.ps.boundary_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 sum_neighbor_inner = ti.Vector([0.0 for _ in range(self.ps.dim)])
-                for k in range(self.ps.fluid_neighbors_num[p_i]):
-                    density_k = self.ps.density[k] / self.density_0
+                for k in range(self.ps.boundary_neighbors_num[p_i]):
+                    density_k = self.ps.density[k]
                     density_k2 = density_k * density_k
                     p_k = self.ps.boundary_neighbors[p_i, j]
                     x_k = self.ps.x[p_k]
@@ -64,7 +66,7 @@ class IISPHSolver(SPHBase):
 
                 sum_neighbor_of_neighbor -= (self.ps.m_V[p_j] * kernel_grad_ij).dot(kernel_grad_ij)
             sum_neighbor_of_neighbor *= m_Vi / density_i2
-            self.a_ii[p_i] += (sum_neighbor + sum_neighbor_of_neighbor) * self.dt[None] * self.dt[None]
+            self.a_ii[p_i] += (sum_neighbor + sum_neighbor_of_neighbor) * self.dt[None] * self.dt[None] * density_02
 
         # Compute source term (i.e., density deviation)
         # Compute the predicted v^star
@@ -74,7 +76,7 @@ class IISPHSolver(SPHBase):
 
         for p_i in range(self.ps.particle_num[None]):
             x_i = self.ps.x[p_i]
-            density_i = self.ps.density[p_i] / self.density_0
+            density_i = self.ps.density[p_i]
             divergence = 0.0
             # Fluid neighbors
             for j in range(self.ps.fluid_neighbors_num[p_i]):
@@ -89,12 +91,22 @@ class IISPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 divergence += self.ps.m_V[p_j] * (self.ps.v[p_i] - self.ps.v[p_j]).dot(self.cubic_kernel_derivative(x_i - x_j))
 
-            self.density_deviation[p_i] = self.density_0 / self.density_0 - density_i - self.dt[None] * divergence
+            self.density_deviation[p_i] = self.density_0 - density_i - self.dt[None] * divergence * self.density_0
+
+        # Clear all pressures
+        for p_i in range(self.ps.particle_num[None]):
+            self.last_pressure[p_i] = 0.0
+            self.ps.pressure[p_i] = 0.0
 
     def pressure_solve(self):
-        for i in range(20):
+        iteration = 0
+        while iteration < 1000:
             self.pressure_solve_iteration()
-            # print(self.ps.pressure[0])
+            iteration += 1
+            if iteration % 100 == 0:
+                print(f'iter {iteration}, density err {self.avg_density_error[None]}')
+            if self.avg_density_error[None] < 1e-3:
+                break
 
     @ti.kernel
     def pressure_solve_iteration(self):
@@ -145,16 +157,22 @@ class IISPHSolver(SPHBase):
                 p_j = self.ps.boundary_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 Ap += self.ps.m_V[p_j] * (accel_p_i - self.pressure_accel[p_j]).dot(self.cubic_kernel_derivative(x_i - x_j))
-            Ap *= dt2
+            Ap *= dt2 * self.density_0
+            # print(self.a_ii[1])
+            if abs(self.a_ii[p_i]) > 1e-6:
+                # Relaxed Jacobi
+                self.ps.pressure[p_i] = ti.max(self.last_pressure[p_i] + omega * (self.density_deviation[p_i] - Ap) / self.a_ii[p_i], 0.0)
+            else:
+                self.ps.pressure[p_i] = 0.0
 
-            # Relaxed Jacobi
-            # self.ps.pressure[p_i] = ti.max(self.last_pressure[p_i] + omega * (self.density_deviation[p_i] - Ap) / self.a_ii[p_i], 0.0)
-            self.ps.pressure[p_i] = self.last_pressure[p_i] + omega * (self.density_deviation[p_i] - Ap) / self.a_ii[p_i]
-
+            if self.ps.pressure[p_i] != 0.0:
+                # new_density = self.density_0
+                # print(" Ap ", Ap, " density deviation ", self.density_deviation[p_i])
+                self.avg_density_error[None] += (Ap - self.density_deviation[p_i]) / self.density_0
+        self.avg_density_error[None] /= self.ps.particle_num[None]
         for p_i in range(self.ps.particle_num[None]):
             # Update the pressure
             self.last_pressure[p_i] = self.ps.pressure[p_i]
-
 
 
     @ti.kernel
@@ -179,12 +197,6 @@ class IISPHSolver(SPHBase):
 
     @ti.kernel
     def compute_pressure_forces(self):
-        # for p_i in range(self.ps.particle_num[None]):
-        #     if self.ps.material[p_i] != self.ps.material_fluid:
-        #         continue
-        #     self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
-        #     self.ps.pressure[p_i] = self.stiffness * (
-        #                 ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 self.d_velocity[p_i].fill(0)

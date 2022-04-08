@@ -21,18 +21,52 @@ if __name__ == "__main__":
     ps = ParticleSystem((domain_size,)*dim, GGUI=True)
 
     if dim == 2:
-        ps.add_cube(lower_corner=[0.3, 0.3],
-                    cube_size=[0.8, 1.6],
+        ps.add_cube(lower_corner=[0.8, 0.8],
+                    cube_size=[0.8, 0.3],
                     velocity=[0.0, -5.0],
                     density=1000.0,
                     color=(177,213,200),
                     material=1)
-        ps.add_cube(lower_corner=[0.0, 0.0],
-                    cube_size=[2.0, 0.025],
-                    velocity=[0.0, 0.0],
+
+        ps.add_cube(lower_corner=[0.8, 0.1],
+                    cube_size=[0.4, 0.3],
+                    velocity=[0.0, 5.0],
                     density=1000.0,
-                    color=(255,255,255),
-                    material=0)
+                    color=(177,213,200),
+                    material=1)
+
+        # # Boundaries
+        # # Bottom
+        # ps.add_cube(lower_corner=[0.0, 0.0],
+        #             cube_size=[2.0, 0.025],
+        #             velocity=[0.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,255,255),
+        #             material=0)
+        #
+        # # Left
+        # ps.add_cube(lower_corner=[0.0, 0.025],
+        #             cube_size=[0.025, 2.0],
+        #             velocity=[0.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,255,255),
+        #             material=0)
+        #
+        # # Top
+        # ps.add_cube(lower_corner=[0.025, 2.0 - 0.025],
+        #             cube_size=[2.0, 0.025],
+        #             velocity=[0.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,255,255),
+        #             material=0)
+        #
+        # # Right
+        # ps.add_cube(lower_corner=[2.0 - 0.025, 0.05],
+        #             cube_size=[0.025, 2.0 - 0.025],
+        #             velocity=[0.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,255,255),
+        #             material=0)
 
     elif dim == 3:
         # Fluid -1 
