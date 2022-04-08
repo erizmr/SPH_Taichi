@@ -10,10 +10,9 @@ from IISPH import IISPHSolver
 ti.init(arch=ti.vulkan, device_memory_fraction=0.8, packed=True) #, log_level=ti.TRACE)
 
 
-
 if __name__ == "__main__":
     domain_size = 2
-    dim = 2
+    dim = 3
     substeps = 5
     output_frames = False
     # solver_type = "WCSPH"
@@ -35,38 +34,38 @@ if __name__ == "__main__":
                     color=(177,213,200),
                     material=1)
 
-        # # Boundaries
-        # # Bottom
-        # ps.add_cube(lower_corner=[0.0, 0.0],
-        #             cube_size=[2.0, 0.025],
-        #             velocity=[0.0, 0.0],
-        #             density=1000.0,
-        #             color=(255,255,255),
-        #             material=0)
-        #
-        # # Left
-        # ps.add_cube(lower_corner=[0.0, 0.025],
-        #             cube_size=[0.025, 2.0],
-        #             velocity=[0.0, 0.0],
-        #             density=1000.0,
-        #             color=(255,255,255),
-        #             material=0)
-        #
-        # # Top
-        # ps.add_cube(lower_corner=[0.025, 2.0 - 0.025],
-        #             cube_size=[2.0, 0.025],
-        #             velocity=[0.0, 0.0],
-        #             density=1000.0,
-        #             color=(255,255,255),
-        #             material=0)
-        #
-        # # Right
-        # ps.add_cube(lower_corner=[2.0 - 0.025, 0.05],
-        #             cube_size=[0.025, 2.0 - 0.025],
-        #             velocity=[0.0, 0.0],
-        #             density=1000.0,
-        #             color=(255,255,255),
-        #             material=0)
+        # Boundaries
+        # Bottom
+        ps.add_cube(lower_corner=[0.0, 0.0],
+                    cube_size=[2.0, 0.025],
+                    velocity=[0.0, 0.0],
+                    density=1000.0,
+                    color=(255,255,255),
+                    material=0)
+
+        # Left
+        ps.add_cube(lower_corner=[0.0, 0.025],
+                    cube_size=[0.025, 2.0],
+                    velocity=[0.0, 0.0],
+                    density=1000.0,
+                    color=(255,255,255),
+                    material=0)
+
+        # Top
+        ps.add_cube(lower_corner=[0.025, 2.0 - 0.025],
+                    cube_size=[2.0, 0.025],
+                    velocity=[0.0, 0.0],
+                    density=1000.0,
+                    color=(255,255,255),
+                    material=0)
+
+        # Right
+        ps.add_cube(lower_corner=[2.0 - 0.025, 0.05],
+                    cube_size=[0.025, 2.0 - 0.025],
+                    velocity=[0.0, 0.0],
+                    density=1000.0,
+                    color=(255,255,255),
+                    material=0)
 
     elif dim == 3:
         # Fluid -1 
@@ -78,12 +77,12 @@ if __name__ == "__main__":
                     material=1)
 
         # Fluid -2 
-        ps.add_cube(lower_corner=[1.2, 1.0, 1.2],
-                    cube_size=[0.4, 0.6, 0.4],
-                    velocity=[0.0, -1.0, 0.0],
-                    density=1000.0,
-                    color=(255,177,27),
-                    material=1)
+        # ps.add_cube(lower_corner=[1.2, 1.0, 1.2],
+        #             cube_size=[0.4, 0.6, 0.4],
+        #             velocity=[0.0, -1.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,177,27),
+        #             material=1)
         # Boundary -1
         # ps.add_cube(lower_corner=[0.6, 0.025, 0.6],
         #             cube_size=[0.4, 0.2, 0.4],

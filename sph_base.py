@@ -11,7 +11,7 @@ class SPHBase:
         self.density_0 = 1000.0  # reference density
         self.mass = self.ps.m_V0 * self.density_0
         self.dt = ti.field(float, shape=())
-        self.dt[None] = 1e-4
+        self.dt[None] = 2e-4
 
     @ti.func
     def cubic_kernel(self, r_norm):

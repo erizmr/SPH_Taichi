@@ -15,7 +15,7 @@ class IISPHSolver(SPHBase):
         self.pressure_accel = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
         particle_node.place(self.d_velocity, self.pressure_accel)
-        self.dt[None] = 1e-3
+        self.dt[None] = 1e-4
 
     @ti.kernel
     def predict_advection(self):
@@ -95,17 +95,20 @@ class IISPHSolver(SPHBase):
 
         # Clear all pressures
         for p_i in range(self.ps.particle_num[None]):
-            self.last_pressure[p_i] = 0.0
-            self.ps.pressure[p_i] = 0.0
+            # self.last_pressure[p_i] = 0.0
+            # self.ps.pressure[p_i] = 0.0
+            self.last_pressure[p_i] = 0.5 * self.ps.pressure[p_i]
 
     def pressure_solve(self):
         iteration = 0
         while iteration < 1000:
+            self.avg_density_error[None] = 0.0
             self.pressure_solve_iteration()
             iteration += 1
             if iteration % 100 == 0:
                 print(f'iter {iteration}, density err {self.avg_density_error[None]}')
             if self.avg_density_error[None] < 1e-3:
+                # print(f'Stop criterion satisfied at iter {iteration}, density err {self.avg_density_error[None]}')
                 break
 
     @ti.kernel
@@ -113,9 +116,9 @@ class IISPHSolver(SPHBase):
         omega = 0.5
         # Compute pressure acceleration
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_fluid:
-                self.pressure_accel[p_i].fill(0)
-                continue
+            # if self.ps.material[p_i] != self.ps.material_fluid:
+            #     self.pressure_accel[p_i].fill(0)
+            #     continue
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
 
@@ -167,8 +170,9 @@ class IISPHSolver(SPHBase):
 
             if self.ps.pressure[p_i] != 0.0:
                 # new_density = self.density_0
-                # print(" Ap ", Ap, " density deviation ", self.density_deviation[p_i])
-                self.avg_density_error[None] += (Ap - self.density_deviation[p_i]) / self.density_0
+                if p_i == 100:
+                    print(" Ap ", Ap, " density deviation ", self.density_deviation[p_i], 'a_ii ', self.a_ii[p_i])
+                self.avg_density_error[None] += abs(Ap - self.density_deviation[p_i]) / self.density_0
         self.avg_density_error[None] /= self.ps.particle_num[None]
         for p_i in range(self.ps.particle_num[None]):
             # Update the pressure
@@ -199,8 +203,9 @@ class IISPHSolver(SPHBase):
     def compute_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
-                self.d_velocity[p_i].fill(0)
+                self.pressure_accel[p_i].fill(0)
                 continue
+            self.pressure_accel[p_i].fill(0)
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
 
@@ -216,6 +221,7 @@ class IISPHSolver(SPHBase):
 
             # Boundary neighbors
             dpj = self.ps.pressure[p_i] / self.density_0 ** 2
+            # dpj = 0.0
             ## Akinci2012
             for j in range(self.ps.boundary_neighbors_num[p_i]):
                 p_j = self.ps.boundary_neighbors[p_i, j]
@@ -224,14 +230,14 @@ class IISPHSolver(SPHBase):
                 d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
                        * self.cubic_kernel_derivative(x_i - x_j)
 
-            self.d_velocity[p_i] += d_v
+            self.pressure_accel[p_i] = d_v
 
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_fluid:
-                self.d_velocity[p_i].fill(0)
-                continue
+            # if self.ps.material[p_i] != self.ps.material_fluid:
+            #     self.d_velocity[p_i].fill(0)
+            #     continue
             x_i = self.ps.x[p_i]
             # Add body force
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
@@ -247,7 +253,7 @@ class IISPHSolver(SPHBase):
         # Symplectic Euler
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] == self.ps.material_fluid:
-                self.ps.v[p_i] += self.dt[None] * self.d_velocity[p_i]
+                self.ps.v[p_i] += self.dt[None] * self.pressure_accel[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
 
     def substep(self):
