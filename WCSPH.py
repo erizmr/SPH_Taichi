@@ -12,6 +12,7 @@ class WCSPHSolver(SPHBase):
         self.d_velocity = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
         particle_node.place(self.d_velocity)
+        self.dt[None] = 2e-4
 
     @ti.kernel
     def compute_densities(self):

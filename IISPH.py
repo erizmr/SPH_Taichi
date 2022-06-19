@@ -170,8 +170,8 @@ class IISPHSolver(SPHBase):
 
             if self.ps.pressure[p_i] != 0.0:
                 # new_density = self.density_0
-                if p_i == 100:
-                    print(" Ap ", Ap, " density deviation ", self.density_deviation[p_i], 'a_ii ', self.a_ii[p_i])
+                # if p_i == 100:
+                #     print(" Ap ", Ap, " density deviation ", self.density_deviation[p_i], 'a_ii ', self.a_ii[p_i])
                 self.avg_density_error[None] += abs(Ap - self.density_deviation[p_i]) / self.density_0
         self.avg_density_error[None] /= self.ps.particle_num[None]
         for p_i in range(self.ps.particle_num[None]):
