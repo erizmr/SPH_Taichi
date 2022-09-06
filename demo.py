@@ -7,16 +7,16 @@ from IISPH import IISPHSolver
 # ti.init(arch=ti.cpu)
 
 # Use GPU for higher peformance if available
-ti.init(arch=ti.vulkan, device_memory_fraction=0.8, packed=True) #, log_level=ti.TRACE)
+ti.init(arch=ti.cuda, device_memory_fraction=0.5)
 
 
 if __name__ == "__main__":
     domain_size = 2
     dim = 3
-    substeps = 5
+    substeps = 2
     output_frames = False
-    # solver_type = "WCSPH"
-    solver_type = "IISPH"
+    solver_type = "WCSPH"
+    # solver_type = "IISPH"
     ps = ParticleSystem((domain_size,)*dim, GGUI=True)
 
     if dim == 2:
@@ -73,16 +73,17 @@ if __name__ == "__main__":
                     cube_size=[0.6, 1.8, 0.6],
                     velocity=[0.0, -1.0, 0.0],
                     density=1000.0,
-                    color=(177,213,200),
+                    color=(50,100,200),
                     material=1)
-
-        # Fluid -2 
-        # ps.add_cube(lower_corner=[1.2, 1.0, 1.2],
-        #             cube_size=[0.4, 0.6, 0.4],
-        #             velocity=[0.0, -1.0, 0.0],
-        #             density=1000.0,
-        #             color=(255,177,27),
-        #             material=1)
+                    
+        # Moving rigid body - 1 
+        ps.add_cube(lower_corner=[1.2, 0.2, 1.2],
+                    cube_size=[0.2, 0.2, 0.2],
+                    velocity=[0.0, 0.0, 0.0],
+                    density=100.0,
+                    color=(255,255,255),
+                    material=2)
+        
         # Boundary -1
         # ps.add_cube(lower_corner=[0.6, 0.025, 0.6],
         #             cube_size=[0.4, 0.2, 0.4],
@@ -92,12 +93,12 @@ if __name__ == "__main__":
         #             material=0)
 
         # Bottom boundary
-        ps.add_cube(lower_corner=[0.0, 0.0, 0.0],
-                    cube_size=[2.0, ps.particle_diameter, 2.0],
-                    velocity=[0.0, 0.0, 0.0],
-                    density=1000.0,
-                    color=(255,255,255),
-                    material=0)
+        # ps.add_cube(lower_corner=[0.0, 0.0, 0.0],
+        #             cube_size=[2.0, ps.particle_diameter, 2.0],
+        #             velocity=[0.0, 0.0, 0.0],
+        #             density=1000.0,
+        #             color=(255,255,255),
+        #             material=0)
 
     if solver_type == "WCSPH":
         solver = WCSPHSolver(ps)

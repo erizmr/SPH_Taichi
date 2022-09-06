@@ -15,6 +15,7 @@ class ParticleSystem:
         # Material
         self.material_boundary = 0
         self.material_fluid = 1
+        self.material_moving_rigid_body = 2
 
         self.particle_radius = 0.01  # particle radius
         self.particle_diameter = 2 * self.particle_radius
@@ -35,6 +36,10 @@ class ParticleSystem:
 
         # Particle related properties
         self.x = ti.Vector.field(self.dim, dtype=float)
+        self.x_old = ti.Vector.field(self.dim, dtype=float)
+        self.x_0 = ti.Vector.field(self.dim, dtype=float)
+        self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=())
+
         self.v = ti.Vector.field(self.dim, dtype=float)
         self.m_V = ti.field(dtype=float)
         self.density = ti.field(dtype=float)
@@ -51,7 +56,7 @@ class ParticleSystem:
 
         # Allocate memory
         self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
-        self.particles_node.place(self.x, self.v, self.density, self.m_V, self.pressure, self.material, self.color)
+        self.particles_node.place(self.x, self.x_old, self.x_0, self.v, self.density, self.m_V, self.pressure, self.material, self.color)
         self.particles_node.place(self.fluid_neighbors_num, self.boundary_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
         self.particle_node.place(self.fluid_neighbors, self.boundary_neighbors)
@@ -82,6 +87,10 @@ class ParticleSystem:
     @ti.func
     def add_particle(self, p, x, v, density, pressure, material, color):
         self.x[p] = x
+        
+        self.x_old[p] = x
+        self.x_0[p] = x
+
         self.v[p] = v
         self.density[p] = density
         self.m_V[p] = self.m_V0
@@ -146,7 +155,7 @@ class ParticleSystem:
                         if self.material[p_j] == self.material_fluid:
                             self.fluid_neighbors[p_i, cnt_fluid] = p_j
                             cnt_fluid += 1
-                        elif self.material[p_j] == self.material_boundary:
+                        elif self.material[p_j] == self.material_boundary or self.material[p_j] == self.material_moving_rigid_body:
                             self.boundary_neighbors[p_i, cnt_boundary] = p_j
                             cnt_boundary += 1
             self.fluid_neighbors_num[p_i] = cnt_fluid

@@ -42,8 +42,10 @@ class WCSPHSolver(SPHBase):
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_fluid:
+            if self.ps.material[p_i] == self.ps.material_boundary:
                 self.d_velocity[p_i].fill(0)
+                continue
+            elif self.ps.material[p_i] == self.ps.material_moving_rigid_body:
                 continue
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
@@ -66,32 +68,57 @@ class WCSPHSolver(SPHBase):
                 p_j = self.ps.boundary_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 # Compute the pressure force contribution, Symmetric Formula
-                d_v += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
+                f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
                     * self.cubic_kernel_derivative(x_i-x_j)
+                d_v += f_p
+                if self.ps.material[p_j] == self.ps.material_moving_rigid_body:
+                    self.d_velocity[p_j] += -f_p
 
             self.d_velocity[p_i] += d_v
 
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_fluid:
+            if self.ps.material[p_i] == self.ps.material_boundary:
                 self.d_velocity[p_i].fill(0)
                 continue
+
             x_i = self.ps.x[p_i]
             # Add body force
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             d_v[1] = self.g
-            for j in range(self.ps.fluid_neighbors_num[p_i]):
-                p_j = self.ps.fluid_neighbors[p_i, j]
-                x_j = self.ps.x[p_j]
-                d_v += self.viscosity_force(p_i, p_j, x_i - x_j)
             self.d_velocity[p_i] = d_v
+
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                for j in range(self.ps.fluid_neighbors_num[p_i]):
+                    p_j = self.ps.fluid_neighbors[p_i, j]
+                    x_j = self.ps.x[p_j]
+                    d_v += self.viscosity_force(p_i, p_j, x_i - x_j)
+                
+                # Boundary neighbors
+                ## Akinci2012
+                for j in range(self.ps.boundary_neighbors_num[p_i]):
+                    p_j = self.ps.boundary_neighbors[p_i, j]
+                    x_j = self.ps.x[p_j]
+                    # f_v = self.viscosity_force(p_i, p_j, x_i - x_j)
+
+                    r = x_i - x_j
+                    v_xy = (self.ps.v[p_i] - self.ps.v[p_j]).dot(r)
+                    f_v = (self.ps.dim + 2) * self.viscosity * (self.mass * self.density_0 * self.ps.m_V[p_j] / (2 * self.ps.density[p_i])) * v_xy / (
+                        r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
+
+
+                    d_v += f_v
+                    if self.ps.material[p_j] == self.ps.material_moving_rigid_body:
+                        self.d_velocity[p_j] += -f_v
+            
+                self.d_velocity[p_i] = d_v
 
     @ti.kernel
     def advect(self):
         # Symplectic Euler
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == self.ps.material_fluid:
+            if self.ps.material[p_i] == self.ps.material_fluid or self.ps.material[p_i] == self.ps.material_moving_rigid_body:
                 self.ps.v[p_i] += self.dt[None] * self.d_velocity[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
 
