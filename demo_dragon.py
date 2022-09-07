@@ -23,12 +23,14 @@ if __name__ == "__main__":
     y_offset = 0.5
 
     # mesh = tm.load("./data/Dragon_50k.obj")
-    mesh = tm.load("./data/bunny_sparse.obj")
-    mesh_scale = 5
+    # mesh = tm.load("./data/bunny_sparse.obj")
+    mesh = tm.load("./data/bunny.stl")
+    mesh_scale = 3
     mesh.apply_scale(mesh_scale)
     offset = np.array([1.5, 0.0 + y_offset, 1.5])
 
     voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
+    # voxelized_mesh.show()
     voxelized_points_np = voxelized_mesh.points + offset
     num_particles_obj = voxelized_points_np.shape[0]
     voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)
