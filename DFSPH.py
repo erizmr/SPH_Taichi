@@ -11,10 +11,10 @@ class DFSPHSolver(SPHBase):
         self.last_pressure = ti.field(dtype=float, shape=self.ps.particle_max_num)
         self.avg_density_error = ti.field(dtype=float, shape=())
 
-        self.d_velocity = ti.Vector.field(self.ps.dim, dtype=float)
+        self.ps.acceleration = ti.Vector.field(self.ps.dim, dtype=float)
         self.pressure_accel = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
-        particle_node.place(self.d_velocity, self.pressure_accel)
+        particle_node.place(self.ps.acceleration, self.pressure_accel)
         self.dt[None] = 1e-4
 
     @ti.kernel
@@ -72,7 +72,7 @@ class DFSPHSolver(SPHBase):
         # Compute the predicted v^star
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] == self.ps.material_fluid:
-                self.ps.v[p_i] += self.dt[None] * self.d_velocity[p_i]
+                self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
 
         for p_i in range(self.ps.particle_num[None]):
             x_i = self.ps.x[p_i]
@@ -236,7 +236,7 @@ class DFSPHSolver(SPHBase):
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
             # if self.ps.material[p_i] != self.ps.material_fluid:
-            #     self.d_velocity[p_i].fill(0)
+            #     self.ps.acceleration[p_i].fill(0)
             #     continue
             x_i = self.ps.x[p_i]
             # Add body force
@@ -246,7 +246,7 @@ class DFSPHSolver(SPHBase):
                 p_j = self.ps.fluid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 d_v += self.viscosity_force(p_i, p_j, x_i - x_j)
-            self.d_velocity[p_i] = d_v
+            self.ps.acceleration[p_i] = d_v
 
     @ti.kernel
     def advect(self):

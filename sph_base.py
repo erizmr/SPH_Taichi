@@ -65,7 +65,7 @@ class SPHBase:
         # Compute the viscosity force contribution
         v_xy = (self.ps.v[p_i] -
                 self.ps.v[p_j]).dot(r)
-        res = 2 * (self.ps.dim + 2) * self.viscosity * (self.mass / (self.ps.density[p_j])) * v_xy / (
+        res = 2 * (self.ps.dim + 2) * self.viscosity * (self.ps.m[p_j] / (self.ps.density[p_j])) * v_xy / (
             r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(
                 r)
         return res
@@ -107,6 +107,7 @@ class SPHBase:
                 x_j = self.ps.x[p_j]
                 delta += self.cubic_kernel((x_i - x_j).norm())
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            # print(self.ps.m_V0, " ", self.ps.m_V[p_i])
 
     def substep(self):
         pass
@@ -215,19 +216,42 @@ class SPHBase:
                 self.ps.x[p_i] += corr
         
 
+    @ti.kernel
+    def compute_rigid_collision(self):
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[p_i] != self.ps.material_moving_rigid_body:
+                continue
+            cnt = 0
+            x_delta = ti.Vector([0.0 for i in range(self.ps.dim)])
+            for j in range(self.ps.boundary_neighbors_num[p_i]):
+                p_j = self.ps.boundary_neighbors[p_i, j]
+
+                if self.ps.material[p_j] == self.ps.material_boundary:
+                    cnt += 1
+                    x_j = self.ps.x[p_j]
+                    r = self.ps.x[p_i] - x_j
+                    if r.norm() < self.ps.particle_diameter:
+                        x_delta += (r.norm() - self.ps.particle_diameter) * r.normalized()
+                        # self.ps.v[p_i] -= 1.5 * self.ps.v[p_i].dot(r.normalized()) * r.normalized()
+                        # self.ps.acceleration[p_i] += 10000 * (r.norm() - self.ps.particle_diameter) * r.normalized()
+            if cnt > 0:
+                self.ps.x[p_i] += 2 * x_delta / cnt
+                        
+
+
     def solve_rigid_body(self):
-        for i in range(1):
+        for i in range(10):
             self.solve_constraints()
+            self.compute_rigid_collision()
             self.enforce_boundary_3D(self.ps.material_moving_rigid_body)
 
 
     def step(self):
         self.ps.initialize_particle_system()
+        # self.compute_moving_boundary_volume()
         self.substep()
         self.solve_rigid_body()
         if self.ps.dim == 2:
             self.enforce_boundary_2D(self.ps.material_fluid)
         elif self.ps.dim == 3:
             self.enforce_boundary_3D(self.ps.material_fluid)
-        # self.solve_rigid_body()
-        self.compute_moving_boundary_volume()

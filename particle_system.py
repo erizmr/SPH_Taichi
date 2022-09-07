@@ -36,12 +36,13 @@ class ParticleSystem:
 
         # Particle related properties
         self.x = ti.Vector.field(self.dim, dtype=float)
-        self.x_old = ti.Vector.field(self.dim, dtype=float)
         self.x_0 = ti.Vector.field(self.dim, dtype=float)
         self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=())
 
         self.v = ti.Vector.field(self.dim, dtype=float)
+        self.acceleration = ti.Vector.field(self.dim, dtype=float)
         self.m_V = ti.field(dtype=float)
+        self.m = ti.field(dtype=float)
         self.density = ti.field(dtype=float)
         self.pressure = ti.field(dtype=float)
         self.material = ti.field(dtype=int)
@@ -56,7 +57,7 @@ class ParticleSystem:
 
         # Allocate memory
         self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
-        self.particles_node.place(self.x, self.x_old, self.x_0, self.v, self.density, self.m_V, self.pressure, self.material, self.color)
+        self.particles_node.place(self.x, self.x_0, self.v, self.acceleration, self.density, self.m_V, self.m, self.pressure, self.material, self.color)
         self.particles_node.place(self.fluid_neighbors_num, self.boundary_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
         self.particle_node.place(self.fluid_neighbors, self.boundary_neighbors)
@@ -88,12 +89,12 @@ class ParticleSystem:
     def add_particle(self, p, x, v, density, pressure, material, color):
         self.x[p] = x
         
-        self.x_old[p] = x
         self.x_0[p] = x
 
         self.v[p] = v
         self.density[p] = density
         self.m_V[p] = self.m_V0
+        self.m[p] = self.m_V0 * density
         self.pressure[p] = pressure
         self.material[p] = material
         self.color[p] = color
