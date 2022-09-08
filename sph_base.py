@@ -235,7 +235,7 @@ class SPHBase:
                         # v_delta -= 1.5 * self.ps.v[p_i].dot(r.normalized()) * r.normalized()
                         # self.ps.acceleration[p_i] += 10000 * (r.norm() - self.ps.particle_diameter) * r.normalized()
             if cnt > 0:
-                self.ps.x[p_i] += 2.0 * x_delta # / cnt
+                self.ps.x[p_i] += 2.0 * x_delta / cnt
                 # self.ps.v[p_i] += v_delta / cnt
                         
 

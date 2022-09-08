@@ -8,7 +8,7 @@ class WCSPHSolver(SPHBase):
         # Pressure state function parameters(WCSPH)
         self.exponent = 7.0
         self.stiffness = 50000.0
-        self.dt[None] = 3e-4
+        self.dt[None] = 2e-4
 
     @ti.kernel
     def compute_densities(self):

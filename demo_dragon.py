@@ -55,7 +55,7 @@ if __name__ == "__main__":
     print("Is the mesh successfully repaired? ", is_success)
     # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
     voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
-    # voxelized_mesh.show()
+    voxelized_mesh.show()
     voxelized_points_np = voxelized_mesh.points + offset
     num_particles_obj = voxelized_points_np.shape[0]
     voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)
@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
     # Bottom boundary
     ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[x_max-x_offset*2, ps.particle_diameter-0.001, z_max-z_offset*2],
+                cube_size=[x_max-x_offset, ps.particle_diameter-0.001, z_max-z_offset],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     
     # left boundary
     ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
+                cube_size=[ps.particle_diameter-0.001, y_max-y_offset, z_max-z_offset],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     
     # back
     ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
+                cube_size=[x_max-x_offset*2, y_max-y_offset, ps.particle_diameter-0.001],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
@@ -105,15 +105,15 @@ if __name__ == "__main__":
     
     # front
     ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, z_max - z_offset],
-                cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
+                cube_size=[x_max-x_offset*2, y_max-y_offset, ps.particle_diameter-0.001],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
                 material=0)
     
     # right
-    ps.add_cube(lower_corner=[x_max-x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
+    ps.add_cube(lower_corner=[x_max-x_offset, 0.0 + y_offset, 0.0 + z_offset],
+                cube_size=[ps.particle_diameter-0.001, y_max-y_offset, z_max-z_offset],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
