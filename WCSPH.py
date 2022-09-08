@@ -8,7 +8,7 @@ class WCSPHSolver(SPHBase):
         # Pressure state function parameters(WCSPH)
         self.exponent = 7.0
         self.stiffness = 50000.0
-        self.dt[None] = 2e-4
+        self.dt[None] = 3e-4
 
     @ti.kernel
     def compute_densities(self):
@@ -49,7 +49,7 @@ class WCSPHSolver(SPHBase):
             dpi = self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
             # Fluid neighbors
             for j in range(self.ps.fluid_neighbors_num[p_i]):
-                p_j = self.ps.fluid_neighbors[p_i, j]
+                p_j = self.ps.fluid_neighbors[p_i, j]   
                 x_j = self.ps.x[p_j]
                 density_j = self.ps.density[p_j] * self.density_0 / self.density_0  # TODO: The density_0 of the neighbor may be different when the fluid density is different
                 dpj = self.ps.pressure[p_j] / (density_j * density_j)
@@ -79,8 +79,10 @@ class WCSPHSolver(SPHBase):
             if self.ps.material[p_i] == self.ps.material_boundary:
                 self.ps.acceleration[p_i].fill(0)
                 continue
-
             x_i = self.ps.x[p_i]
+
+
+            ############## Body force ###############
             # Add body force
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
             d_v[1] = self.g

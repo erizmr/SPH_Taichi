@@ -21,7 +21,7 @@ class ParticleSystem:
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
-        self.particle_max_num = 2 ** 18
+        self.particle_max_num = 2 ** 19
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
@@ -185,7 +185,7 @@ class ParticleSystem:
         assert self.GGUI
         for i in self.x:
             # if self.material[i] == self.material_fluid:
-            self.x_vis_buffer[i] = self.x[i] / self.domain_size[0]
+            self.x_vis_buffer[i] = self.x[i]
             self.color_vis_buffer[i] = self.color[i] / 255
 
     def dump(self):

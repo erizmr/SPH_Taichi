@@ -12,24 +12,49 @@ ti.init(arch=ti.cuda, device_memory_fraction=0.5)
 
 
 if __name__ == "__main__":
-    domain_size = 3
+    x_max = 5.0
+    y_max = 3.0
+    z_max = 2.0
+
+    domain_size = np.array([x_max, y_max, z_max])
+
+    box_anchors = ti.Vector.field(3, dtype=ti.f32, shape = 8)
+    box_anchors[0] = ti.Vector([0.0, 0.0, 0.0])
+    box_anchors[1] = ti.Vector([0.0, y_max, 0.0])
+    box_anchors[2] = ti.Vector([x_max, 0.0, 0.0])
+    box_anchors[3] = ti.Vector([x_max, y_max, 0.0])
+
+    box_anchors[4] = ti.Vector([0.0, 0.0, z_max])
+    box_anchors[5] = ti.Vector([0.0, y_max, z_max])
+    box_anchors[6] = ti.Vector([x_max, 0.0, z_max])
+    box_anchors[7] = ti.Vector([x_max, y_max, z_max])
+
+    box_lines_indices = ti.field(int, shape=(2 * 12))
+
+    for i, val in enumerate([0, 1, 0, 2, 1, 3, 2, 3, 4, 5, 4, 6, 5, 7, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7]):
+        box_lines_indices[i] = val
+
     dim = 3
-    substeps = 2
+    substeps = 1
     output_frames = False
     solver_type = "WCSPH"
     # solver_type = "IISPH"
-    ps = ParticleSystem((domain_size,)*dim, GGUI=True)
+    ps = ParticleSystem(domain_size, GGUI=True)
 
-    y_offset = 0.5
+    x_offset = 0.2
+    y_offset = 0.2
+    z_offset = 0.2
 
-    # mesh = tm.load("./data/Dragon_50k.obj")
+    mesh = tm.load("./data/Dragon_50k.obj")
     # mesh = tm.load("./data/bunny_sparse.obj")
-    mesh = tm.load("./data/bunny.stl")
-    mesh_scale = 3
+    # mesh = tm.load("./data/bunny.stl")
+    mesh_scale = 1
     mesh.apply_scale(mesh_scale)
-    offset = np.array([1.5, 0.0 + y_offset, 1.5])
-
-    voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
+    offset = np.array([3.5, 0.0 + y_offset, 1.0])
+    is_success = tm.repair.fill_holes(mesh)
+    print("Is the mesh successfully repaired? ", is_success)
+    # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
+    voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
     # voxelized_mesh.show()
     voxelized_points_np = voxelized_mesh.points + offset
     num_particles_obj = voxelized_points_np.shape[0]
@@ -43,64 +68,56 @@ if __name__ == "__main__":
                      0.0 * np.ones((num_particles_obj, 3)), # velocity
                      10 * np.ones(num_particles_obj), # density
                      np.zeros(num_particles_obj), # pressure
-                     np.array([2 for _ in range(num_particles_obj)], dtype=int), # material
+                     np.array([0 for _ in range(num_particles_obj)], dtype=int), # material
                      255 * np.ones((num_particles_obj, 3))) # color
-        
+
     # Fluid -1 
-    ps.add_cube(lower_corner=[0.6, 0.1 + y_offset, 0.6],
-                cube_size=[0.6, 1.2, 0.6],
-                velocity=[0.0, -3.0, 0.0],
+    ps.add_cube(lower_corner=[0.1+x_offset, 0.1 + y_offset, 0.5+z_offset],
+                cube_size=[0.6, 2.0, 0.6],
+                velocity=[0.0, -1.0, 0.0],
                 density=1000.0,
                 color=(50,100,200),
                 material=1)
-                
-    # Moving rigid body - 1 
-    # ps.add_cube(lower_corner=[1.2, 0.2, 1.2],
-    #             cube_size=[0.2, 0.2, 0.2],
-    #             velocity=[0.0, 0.0, 0.0],
-    #             density=100.0,
-    #             color=(255,255,255),
-    #             material=2)
 
     # Bottom boundary
-    ps.add_cube(lower_corner=[0.0, 0.0 + y_offset, 0.0],
-                cube_size=[2.0, ps.particle_diameter-0.001, 2.0],
+    ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
+                cube_size=[x_max-x_offset*2, ps.particle_diameter-0.001, z_max-z_offset*2],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
                 material=0)
     
     # left boundary
-    ps.add_cube(lower_corner=[0.0, 0.0 + y_offset, 0.0],
-                cube_size=[ps.particle_diameter, 1.0, 2.0],
+    ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
+                cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
                 material=0)
     
-    # right boundary
-    ps.add_cube(lower_corner=[0.0, 0.0 + y_offset, 0.0],
-                cube_size=[2.0, 1.0, ps.particle_diameter],
+    # # right boundary
+    ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
+                cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
                 material=0)
     
     # Forward
-    # ps.add_cube(lower_corner=[0.0, 0.0 + y_offset, 2.0],
-    #             cube_size=[2.0, 1.0, ps.particle_diameter-0.001],
-    #             velocity=[0.0, 0.0, 0.0],
-    #             density=1000.0,
-    #             color=(255,255,255),
-    #             material=0)
-    
-    # Back
-    ps.add_cube(lower_corner=[2.0, 0.0 + y_offset, 0.0],
-                cube_size=[ps.particle_diameter-0.001, 1.0, 2.0],
+    ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, z_max - z_offset],
+                cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
                 velocity=[0.0, 0.0, 0.0],
                 density=1000.0,
                 color=(255,255,255),
                 material=0)
+    
+    # Back
+    # ps.add_cube(lower_corner=[2.0, 0.0 + y_offset, 0.0],
+    #             cube_size=[ps.particle_diameter-0.001, 1.0, 2.0],
+    #             velocity=[0.0, 0.0, 0.0],
+    #             density=1000.0,
+    #             color=(255,255,255),
+    #             material=0)
         
     if solver_type == "WCSPH":
         solver = WCSPHSolver(ps)
@@ -112,9 +129,9 @@ if __name__ == "__main__":
 
     scene = ti.ui.Scene()
     camera = ti.ui.make_camera()
-    camera.position(0.5, 1.0, 2.0)
+    camera.position(0.0, 1.5, 2.5)
     camera.up(0.0, 1.0, 0.0)
-    camera.lookat(0.5, 0.5, 0.5)
+    camera.lookat(0.0, 0.0, 0.0)
     camera.fov(60)
     scene.set_camera(camera)
 
@@ -149,6 +166,8 @@ if __name__ == "__main__":
 
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
+
+            scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
             canvas.scene(scene)
 
         if output_frames:

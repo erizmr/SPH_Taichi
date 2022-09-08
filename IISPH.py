@@ -15,7 +15,7 @@ class IISPHSolver(SPHBase):
         self.pressure_accel = ti.Vector.field(self.ps.dim, dtype=float)
         particle_node = ti.root.dense(ti.i, self.ps.particle_max_num)
         particle_node.place(self.ps.acceleration, self.pressure_accel)
-        self.dt[None] = 1e-4
+        self.dt[None] = 2e-4
 
     @ti.kernel
     def predict_advection(self):

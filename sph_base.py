@@ -9,7 +9,6 @@ class SPHBase:
         self.g = -9.80  # Gravity
         self.viscosity = 0.01  # viscosity
         self.density_0 = 1000.0  # reference density
-        self.mass = self.ps.m_V0 * self.density_0
         self.dt = ti.field(float, shape=())
         self.dt[None] = 2e-4
 
@@ -223,6 +222,7 @@ class SPHBase:
                 continue
             cnt = 0
             x_delta = ti.Vector([0.0 for i in range(self.ps.dim)])
+            # v_delta = ti.Vector([0.0 for i in range(self.ps.dim)])
             for j in range(self.ps.boundary_neighbors_num[p_i]):
                 p_j = self.ps.boundary_neighbors[p_i, j]
 
@@ -232,15 +232,16 @@ class SPHBase:
                     r = self.ps.x[p_i] - x_j
                     if r.norm() < self.ps.particle_diameter:
                         x_delta += (r.norm() - self.ps.particle_diameter) * r.normalized()
-                        # self.ps.v[p_i] -= 1.5 * self.ps.v[p_i].dot(r.normalized()) * r.normalized()
+                        # v_delta -= 1.5 * self.ps.v[p_i].dot(r.normalized()) * r.normalized()
                         # self.ps.acceleration[p_i] += 10000 * (r.norm() - self.ps.particle_diameter) * r.normalized()
             if cnt > 0:
-                self.ps.x[p_i] += 2 * x_delta / cnt
+                self.ps.x[p_i] += 2.0 * x_delta # / cnt
+                # self.ps.v[p_i] += v_delta / cnt
                         
 
 
     def solve_rigid_body(self):
-        for i in range(10):
+        for i in range(5):
             self.solve_constraints()
             self.compute_rigid_collision()
             self.enforce_boundary_3D(self.ps.material_moving_rigid_body)
