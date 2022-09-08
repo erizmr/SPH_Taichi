@@ -95,7 +95,7 @@ if __name__ == "__main__":
                 color=(255,255,255),
                 material=0)
     
-    # # right boundary
+    # back
     ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
                 cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
                 velocity=[0.0, 0.0, 0.0],
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                 color=(255,255,255),
                 material=0)
     
-    # Forward
+    # front
     ps.add_cube(lower_corner=[0.0+x_offset, 0.0 + y_offset, z_max - z_offset],
                 cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
                 velocity=[0.0, 0.0, 0.0],
@@ -111,13 +111,13 @@ if __name__ == "__main__":
                 color=(255,255,255),
                 material=0)
     
-    # Back
-    # ps.add_cube(lower_corner=[2.0, 0.0 + y_offset, 0.0],
-    #             cube_size=[ps.particle_diameter-0.001, 1.0, 2.0],
-    #             velocity=[0.0, 0.0, 0.0],
-    #             density=1000.0,
-    #             color=(255,255,255),
-    #             material=0)
+    # right
+    ps.add_cube(lower_corner=[x_max-x_offset, 0.0 + y_offset, 0.0+z_offset],
+                cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
+                velocity=[0.0, 0.0, 0.0],
+                density=1000.0,
+                color=(255,255,255),
+                material=0)
         
     if solver_type == "WCSPH":
         solver = WCSPHSolver(ps)
