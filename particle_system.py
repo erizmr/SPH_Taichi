@@ -12,6 +12,9 @@ class ParticleSystem:
         assert self.dim > 1
         self.screen_to_world_ratio = 50
         self.bound = self.domain_size # self.screen_to_world_ratio
+        # All objects id and its particle num
+        self.object_id_collection = dict()
+
         # Material
         self.material_boundary = 0
         self.material_fluid = 1
@@ -21,7 +24,7 @@ class ParticleSystem:
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
-        self.particle_max_num = 2 ** 19
+        self.particle_max_num = 2 ** 18
         self.particle_max_num_per_cell = 100
         self.particle_max_num_neighbor = 100
         self.particle_num = ti.field(int, shape=())
@@ -35,6 +38,7 @@ class ParticleSystem:
         self.padding = self.grid_size
 
         # Particle related properties
+        self.object_id = ti.field(dtype=int)
         self.x = ti.Vector.field(self.dim, dtype=float)
         self.x_0 = ti.Vector.field(self.dim, dtype=float)
         self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=())
@@ -47,6 +51,7 @@ class ParticleSystem:
         self.pressure = ti.field(dtype=float)
         self.material = ti.field(dtype=int)
         self.color = ti.Vector.field(3, dtype=int)
+        self.is_dynamic = ti.field(dtype=int)
 
         # Neighbors information
         self.fluid_neighbors = ti.field(int)
@@ -57,7 +62,7 @@ class ParticleSystem:
 
         # Allocate memory
         self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
-        self.particles_node.place(self.x, self.x_0, self.v, self.acceleration, self.density, self.m_V, self.m, self.pressure, self.material, self.color)
+        self.particles_node.place(self.object_id, self.x, self.x_0, self.v, self.acceleration, self.density, self.m_V, self.m, self.pressure, self.material, self.color, self.is_dynamic)
         self.particles_node.place(self.fluid_neighbors_num, self.boundary_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
         self.particle_node.place(self.fluid_neighbors, self.boundary_neighbors)
@@ -86,26 +91,56 @@ class ParticleSystem:
             self.particles_node.place(self.x_vis_buffer, self.color_vis_buffer)
 
     @ti.func
-    def add_particle(self, p, x, v, density, pressure, material, color):
+    def add_particle(self, p, obj_id, x, v, density, pressure, material, is_dynamic, color):
+        self.object_id[p] = obj_id
         self.x[p] = x
-        
         self.x_0[p] = x
-
         self.v[p] = v
         self.density[p] = density
         self.m_V[p] = self.m_V0
         self.m[p] = self.m_V0 * density
         self.pressure[p] = pressure
         self.material[p] = material
+        self.is_dynamic[p] = is_dynamic
         self.color[p] = color
-
-    @ti.kernel
-    def add_particles(self, new_particles_num: int,
+    
+    def add_particles(self,
+                      object_id: int,
+                      new_particles_num: int,
                       new_particles_positions: ti.ext_arr(),
                       new_particles_velocity: ti.ext_arr(),
                       new_particle_density: ti.ext_arr(),
                       new_particle_pressure: ti.ext_arr(),
                       new_particles_material: ti.ext_arr(),
+                      new_particles_is_dynamic: ti.ext_arr(),
+                      new_particles_color: ti.ext_arr()
+                      ):
+        if object_id in self.object_id_collection:
+            self.object_id_collection[object_id] += new_particles_num
+        else:
+            self.object_id_collection[object_id] = new_particles_num
+        
+        self._add_particles(object_id,
+                      new_particles_num,
+                      new_particles_positions,
+                      new_particles_velocity,
+                      new_particle_density,
+                      new_particle_pressure,
+                      new_particles_material,
+                      new_particles_is_dynamic,
+                      new_particles_color
+                      )
+
+    @ti.kernel
+    def _add_particles(self,
+                      object_id: int,
+                      new_particles_num: int,
+                      new_particles_positions: ti.ext_arr(),
+                      new_particles_velocity: ti.ext_arr(),
+                      new_particle_density: ti.ext_arr(),
+                      new_particle_pressure: ti.ext_arr(),
+                      new_particles_material: ti.ext_arr(),
+                      new_particles_is_dynamic: ti.ext_arr(),
                       new_particles_color: ti.ext_arr()):
         for p in range(self.particle_num[None], self.particle_num[None] + new_particles_num):
             v = ti.Vector.zero(float, self.dim)
@@ -113,11 +148,13 @@ class ParticleSystem:
             for d in ti.static(range(self.dim)):
                 v[d] = new_particles_velocity[p - self.particle_num[None], d]
                 x[d] = new_particles_positions[p - self.particle_num[None], d]
-            self.add_particle(p, x, v,
+            self.add_particle(p, object_id, x, v,
                               new_particle_density[p - self.particle_num[None]],
                               new_particle_pressure[p - self.particle_num[None]],
                               new_particles_material[p - self.particle_num[None]],
-                              ti.Vector([new_particles_color[p - self.particle_num[None], i] for i in range(3)]))
+                              new_particles_is_dynamic[p - self.particle_num[None]],
+                              ti.Vector([new_particles_color[p - self.particle_num[None], i] for i in range(3)])
+                              )
         self.particle_num[None] += new_particles_num
 
     @ti.func
@@ -156,7 +193,7 @@ class ParticleSystem:
                         if self.material[p_j] == self.material_fluid:
                             self.fluid_neighbors[p_i, cnt_fluid] = p_j
                             cnt_fluid += 1
-                        elif self.material[p_j] == self.material_boundary or self.material[p_j] == self.material_moving_rigid_body:
+                        elif self.material[p_j] == self.material_boundary:
                             self.boundary_neighbors[p_i, cnt_boundary] = p_j
                             cnt_boundary += 1
             self.fluid_neighbors_num[p_i] = cnt_fluid
@@ -170,36 +207,63 @@ class ParticleSystem:
         self.search_neighbors()
 
     @ti.kernel
-    def copy_to_numpy_nd(self, np_arr: ti.ext_arr(), src_arr: ti.template()):
+    def copy_to_numpy_nd(self, obj_id: int, np_arr: ti.ext_arr(), src_arr: ti.template()):
         for i in range(self.particle_num[None]):
-            for j in ti.static(range(self.dim)):
-                np_arr[i, j] = src_arr[i][j]
+            if self.object_id[i] == obj_id:
+                for j in ti.static(range(self.dim)):
+                    np_arr[i, j] = src_arr[i][j]
 
     @ti.kernel
     def copy_to_numpy(self, np_arr: ti.ext_arr(), src_arr: ti.template()):
         for i in range(self.particle_num[None]):
             np_arr[i] = src_arr[i]
+    
+    def copy_to_vis_buffer(self, invisible_objects=[]):
+        for obj_id in self.object_id_collection:
+            if obj_id not in invisible_objects:
+                self._copy_to_vis_buffer(obj_id)
 
     @ti.kernel
-    def copy_to_vis_buffer(self):
+    def _copy_to_vis_buffer(self, obj_id: int):
         assert self.GGUI
-        for i in self.x:
-            # if self.material[i] == self.material_fluid:
-            self.x_vis_buffer[i] = self.x[i]
-            self.color_vis_buffer[i] = self.color[i] / 255
+        for i in range(self.particle_num[None]):
+            if self.object_id[i] == obj_id:
+                self.x_vis_buffer[i] = self.x[i]
+                self.color_vis_buffer[i] = self.color[i] / 255.0
 
-    def dump(self):
-        np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
-        self.copy_to_numpy_nd(np_x, self.x)
+    # def dump(self):
+    #     np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
+    #     self.copy_to_numpy_nd(np_x, self.x)
 
-        np_v = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
-        self.copy_to_numpy_nd(np_v, self.v)
+    #     np_v = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
+    #     self.copy_to_numpy_nd(np_v, self.v)
 
-        np_material = np.ndarray((self.particle_num[None],), dtype=np.int32)
-        self.copy_to_numpy(np_material, self.material)
+    #     np_material = np.ndarray((self.particle_num[None],), dtype=np.int32)
+    #     self.copy_to_numpy(np_material, self.material)
 
-        np_color = np.ndarray((self.particle_num[None],), dtype=np.int32)
-        self.copy_to_numpy(np_color, self.color)
+    #     np_color = np.ndarray((self.particle_num[None],), dtype=np.int32)
+    #     self.copy_to_numpy(np_color, self.color)
+
+    #     return {
+    #         'position': np_x,
+    #         'velocity': np_v,
+    #         'material': np_material,
+    #         'color': np_color
+    #     }
+    
+    def dump(self, obj_id):
+        particle_num = self.object_id_collection[obj_id]
+        np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
+        self.copy_to_numpy_nd(obj_id, np_x, self.x)
+
+        np_v = np.ndarray((particle_num, self.dim), dtype=np.float32)
+        self.copy_to_numpy_nd(obj_id, np_v, self.v)
+
+        np_material = np.ndarray((particle_num,), dtype=np.int32)
+        self.copy_to_numpy(obj_id, np_material, self.material)
+
+        np_color = np.ndarray((particle_num,), dtype=np.int32)
+        self.copy_to_numpy(obj_id, np_color, self.color)
 
         return {
             'position': np_x,
@@ -209,9 +273,11 @@ class ParticleSystem:
         }
 
     def add_cube(self,
+                 object_id,
                  lower_corner,
                  cube_size,
                  material,
+                 is_dynamic,
                  color=(0,0,0),
                  density=None,
                  pressure=None,
@@ -236,13 +302,13 @@ class ParticleSystem:
                                               reduce(lambda x, y: x * y, list(new_positions.shape[1:]))).transpose()
         print("new position shape ", new_positions.shape)
         if velocity is None:
-            velocity = np.full_like(new_positions, 0)
+            velocity_arr = np.full_like(new_positions, 0)
         else:
-            velocity = np.array([velocity for _ in range(num_new_particles)], dtype=np.float32)
+            velocity_arr = np.array([velocity for _ in range(num_new_particles)], dtype=np.float32)
 
-        material = np.full_like(np.zeros(num_new_particles), material)
-        color = np.stack([np.full_like(np.zeros(num_new_particles), c) for c in color], axis=1)
-        print(color.shape)
-        density = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
-        pressure = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
-        self.add_particles(num_new_particles, new_positions, velocity, density, pressure, material, color)
+        material_arr = np.full_like(np.zeros(num_new_particles), material)
+        is_dynamic_arr = np.full_like(np.zeros(num_new_particles), is_dynamic)
+        color_arr = np.stack([np.full_like(np.zeros(num_new_particles), c) for c in color], axis=1)
+        density_arr = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
+        pressure_arr = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
+        self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)

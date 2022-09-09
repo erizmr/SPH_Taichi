@@ -121,7 +121,7 @@ class SPHBase:
     @ti.kernel
     def enforce_boundary_2D(self, particle_type:int):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == particle_type: # self.ps.material_fluid or self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            if self.ps.material[p_i] == particle_type: 
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0])
                 if pos[0] > self.ps.bound[0] - self.ps.padding:
@@ -189,6 +189,7 @@ class SPHBase:
         cm /= sum_m
         # print(cm)
         return cm
+
 
     @ti.kernel
     def solve_constraints(self):
