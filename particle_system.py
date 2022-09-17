@@ -168,6 +168,17 @@ class ParticleSystem:
         for d in ti.static(range(self.dim)):
             flag = flag and (0 <= cell[d] < self.grid_num[d])
         return flag
+    
+
+    @ti.func
+    def is_static_rigid_body(self, p):
+        return self.material[p] == self.material_boundary and (not self.is_dynamic[p])
+
+
+    @ti.func
+    def is_dynamic_rigid_body(self, p):
+        return self.material[p] == self.material_boundary and self.is_dynamic[p]
+
 
     @ti.kernel
     def allocate_particles_to_grid(self):

@@ -97,7 +97,8 @@ class SPHBase:
     @ti.kernel
     def compute_moving_boundary_volume(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_moving_rigid_body:
+            # if self.ps.material[p_i] != self.ps.material_moving_rigid_body:
+            if not self.ps.is_dynamic_rigid_body(p_i):
                 continue
             x_i = self.ps.x[p_i]
             delta = self.cubic_kernel(0.0)
@@ -121,7 +122,7 @@ class SPHBase:
     @ti.kernel
     def enforce_boundary_2D(self, particle_type:int):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == particle_type: 
+            if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]: 
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0])
                 if pos[0] > self.ps.bound[0] - self.ps.padding:
@@ -145,7 +146,7 @@ class SPHBase:
     @ti.kernel
     def enforce_boundary_3D(self, particle_type:int):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == particle_type: #self.ps.material_fluid or self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]: #self.ps.material_fluid or self.ps.material[p_i] == self.ps.material_moving_rigid_body:
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0, 0.0])
                 if pos[0] > self.ps.bound[0] - self.ps.padding:
@@ -181,7 +182,8 @@ class SPHBase:
         sum_m = 0.0
         cm = ti.Vector([0.0, 0.0, 0.0])
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            # if self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            if self.ps.is_dynamic_rigid_body(p_i):
                 # mass = self.ps.m_V[p_i]
                 mass = self.ps.m_V0 * self.ps.density[p_i]
                 cm += mass * self.ps.x[p_i]
@@ -198,7 +200,8 @@ class SPHBase:
         # A
         A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            # if self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            if self.ps.is_dynamic_rigid_body(p_i):
                 q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[None]
                 p = self.ps.x[p_i] - cm
                 # A += self.ps.m_V[p_i] * p @ q.transpose()
@@ -210,7 +213,8 @@ class SPHBase:
             R = ti.Matrix.identity(ti.f32, 3)
         
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            # if self.ps.material[p_i] == self.ps.material_moving_rigid_body:
+            if self.ps.is_dynamic_rigid_body(p_i):
                 goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[None])
                 corr = (goal - self.ps.x[p_i]) * 1.0
                 self.ps.x[p_i] += corr
@@ -219,7 +223,8 @@ class SPHBase:
     @ti.kernel
     def compute_rigid_collision(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_moving_rigid_body:
+            # if self.ps.material[p_i] != self.ps.material_moving_rigid_body:
+            if not self.ps.is_dynamic_rigid_body(p_i):
                 continue
             cnt = 0
             x_delta = ti.Vector([0.0 for i in range(self.ps.dim)])
@@ -227,7 +232,8 @@ class SPHBase:
             for j in range(self.ps.boundary_neighbors_num[p_i]):
                 p_j = self.ps.boundary_neighbors[p_i, j]
 
-                if self.ps.material[p_j] == self.ps.material_boundary:
+                # if self.ps.material[p_j] == self.ps.material_boundary:
+                if self.ps.is_static_rigid_body(p_i):
                     cnt += 1
                     x_j = self.ps.x[p_j]
                     r = self.ps.x[p_i] - x_j
@@ -245,7 +251,8 @@ class SPHBase:
         for i in range(5):
             self.solve_constraints()
             self.compute_rigid_collision()
-            self.enforce_boundary_3D(self.ps.material_moving_rigid_body)
+            # self.enforce_boundary_3D(self.ps.material_moving_rigid_body)
+            self.enforce_boundary_3D(self.ps.material_boundary)
 
 
     def step(self):
