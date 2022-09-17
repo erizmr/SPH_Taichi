@@ -10,6 +10,7 @@ class WCSPHSolver(SPHBase):
         self.stiffness = 50000.0
         self.dt[None] = 3e-4
 
+
     @ti.kernel
     def compute_densities(self):
         for p_i in range(self.ps.particle_num[None]):
@@ -30,6 +31,7 @@ class WCSPHSolver(SPHBase):
                 self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
             self.ps.density[p_i] *= self.density_0
 
+
     @ti.kernel
     def compute_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
@@ -38,14 +40,12 @@ class WCSPHSolver(SPHBase):
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
         for p_i in range(self.ps.particle_num[None]):
-            # if self.ps.material[p_i] == self.ps.material_boundary:
             if self.ps.is_static_rigid_body(p_i):
                 self.ps.acceleration[p_i].fill(0)
                 continue
             elif self.ps.is_dynamic_rigid_body(p_i):
                 continue
-            elif self.ps.material[p_i] == self.ps.material_moving_rigid_body:
-                continue
+
             x_i = self.ps.x[p_i]
             d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
 
@@ -70,7 +70,6 @@ class WCSPHSolver(SPHBase):
                 f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
                     * self.cubic_kernel_derivative(x_i-x_j)
                 d_v += f_p
-                # if self.ps.material[p_j] == self.ps.material_moving_rigid_body:
                 if self.ps.is_dynamic_rigid_body(p_j):
                     self.ps.acceleration[p_j] += -f_p
 
@@ -80,12 +79,10 @@ class WCSPHSolver(SPHBase):
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in range(self.ps.particle_num[None]):
-            # if self.ps.material[p_i] == self.ps.material_boundary:
             if self.ps.is_static_rigid_body(p_i):
                 self.ps.acceleration[p_i].fill(0)
                 continue
             x_i = self.ps.x[p_i]
-
 
             ############## Body force ###############
             # Add body force
@@ -136,20 +133,20 @@ class WCSPHSolver(SPHBase):
                         r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
 
                     d_v += f_v
-                    # if self.ps.material[p_j] == self.ps.material_moving_rigid_body:
                     if self.ps.is_dynamic_rigid_body(p_j):
                         self.ps.acceleration[p_j] += -f_v
             
                 self.ps.acceleration[p_i] = d_v
+
 
     @ti.kernel
     def advect(self):
         # Symplectic Euler
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_dynamic[p_i]:
-            # if self.ps.material[p_i] == self.ps.material_fluid or self.ps.material[p_i] == self.ps.material_moving_rigid_body:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
+
 
     def substep(self):
         self.compute_densities()

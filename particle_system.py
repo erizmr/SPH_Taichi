@@ -18,7 +18,6 @@ class ParticleSystem:
         # Material
         self.material_boundary = 0
         self.material_fluid = 1
-        self.material_moving_rigid_body = 2
 
         self.particle_radius = 0.01  # particle radius
         self.particle_diameter = 2 * self.particle_radius
@@ -204,7 +203,7 @@ class ParticleSystem:
                         if self.material[p_j] == self.material_fluid:
                             self.fluid_neighbors[p_i, cnt_fluid] = p_j
                             cnt_fluid += 1
-                        elif self.material[p_j] == self.material_boundary or self.material[p_j] == self.material_moving_rigid_body:
+                        elif self.material[p_j] == self.material_boundary:
                             self.boundary_neighbors[p_i, cnt_boundary] = p_j
                             cnt_boundary += 1
             self.fluid_neighbors_num[p_i] = cnt_fluid
