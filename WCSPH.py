@@ -140,7 +140,8 @@ class WCSPHSolver(SPHBase):
     def advect(self):
         # Symplectic Euler
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.is_dynamic[p_i]:
+            # if self.ps.is_dynamic[p_i]:
+            if self.ps.material[p_i] == self.ps.material_fluid or self.ps.material[p_i] == self.ps.material_moving_rigid_body:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
 
