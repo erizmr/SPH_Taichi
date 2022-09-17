@@ -869,7 +869,7 @@ class SPHSolver:
         self.material[i] = material
 
     @ti.kernel
-    def fill(self, new_particles: ti.i32, new_positions: ti.ext_arr(),
+    def fill(self, new_particles: ti.i32, new_positions: ti.types.ndarray(),
              new_material: ti.i32, color: ti.i32):
         for i in range(self.particle_num[None],
                        self.particle_num[None] + new_particles):
@@ -943,13 +943,13 @@ class SPHSolver:
         self.particle_num[None] += num_new_particles
 
     @ti.kernel
-    def copy_dynamic_nd(self, np_x: ti.ext_arr(), input_x: ti.template()):
+    def copy_dynamic_nd(self, np_x: ti.types.ndarray(), input_x: ti.template()):
         for i in range(self.particle_num[None]):
             for j in ti.static(range(self.dim)):
                 np_x[i, j] = input_x[i][j]
 
     @ti.kernel
-    def copy_dynamic(self, np_x: ti.ext_arr(), input_x: ti.template()):
+    def copy_dynamic(self, np_x: ti.types.ndarray(), input_x: ti.template()):
         for i in range(self.particle_num[None]):
             np_x[i] = input_x[i]
 

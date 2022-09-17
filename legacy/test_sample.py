@@ -219,7 +219,7 @@ class sph_solver:
         nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
 
     @ti.kernel
-    def init(self, p_list:ti.ext_arr(), w_list:ti.ext_arr()):
+    def init(self, p_list:ti.types.ndarray(), w_list:ti.types.ndarray()):
         for i in range(self.particle_numbers):
             for j in ti.static(range(self.dim)):
                 self.particle_positions[i][j] = p_list[i,j]
