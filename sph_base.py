@@ -82,12 +82,12 @@ class SPHBase:
     @ti.kernel
     def compute_static_boundary_volume(self):
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.material[p_i] != self.ps.material_boundary:
+            if self.ps.material[p_i] != self.ps.material_solid:
                 continue
             x_i = self.ps.x[p_i]
             delta = self.cubic_kernel(0.0)
-            for j in range(self.ps.boundary_neighbors_num[p_i]):
-                p_j = self.ps.boundary_neighbors[p_i, j]
+            for j in range(self.ps.solid_neighbors_num[p_i]):
+                p_j = self.ps.solid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 delta += self.cubic_kernel((x_i - x_j).norm())
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
@@ -101,8 +101,8 @@ class SPHBase:
                 continue
             x_i = self.ps.x[p_i]
             delta = self.cubic_kernel(0.0)
-            for j in range(self.ps.boundary_neighbors_num[p_i]):
-                p_j = self.ps.boundary_neighbors[p_i, j]
+            for j in range(self.ps.solid_neighbors_num[p_i]):
+                p_j = self.ps.solid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 delta += self.cubic_kernel((x_i - x_j).norm())
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
@@ -224,10 +224,10 @@ class SPHBase:
             cnt = 0
             x_delta = ti.Vector([0.0 for i in range(self.ps.dim)])
             # v_delta = ti.Vector([0.0 for i in range(self.ps.dim)])
-            for j in range(self.ps.boundary_neighbors_num[p_i]):
-                p_j = self.ps.boundary_neighbors[p_i, j]
+            for j in range(self.ps.solid_neighbors_num[p_i]):
+                p_j = self.ps.solid_neighbors[p_i, j]
 
-                # if self.ps.material[p_j] == self.ps.material_boundary:
+                # if self.ps.material[p_j] == self.ps.material_solid:
                 if self.ps.is_static_rigid_body(p_i):
                     cnt += 1
                     x_j = self.ps.x[p_j]
@@ -246,7 +246,7 @@ class SPHBase:
         for i in range(5):
             self.solve_constraints()
             self.compute_rigid_collision()
-            self.enforce_boundary_3D(self.ps.material_boundary)
+            self.enforce_boundary_3D(self.ps.material_solid)
 
 
     def step(self):

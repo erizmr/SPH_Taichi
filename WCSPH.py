@@ -8,6 +8,7 @@ class WCSPHSolver(SPHBase):
         # Pressure state function parameters(WCSPH)
         self.exponent = 7.0
         self.stiffness = 50000.0
+        # self.dt[None] = 3e-4
         self.dt[None] = 3e-4
 
 
@@ -25,8 +26,8 @@ class WCSPHSolver(SPHBase):
                 self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
             # Boundary neighbors
             ## Akinci2012
-            for j in range(self.ps.boundary_neighbors_num[p_i]):
-                p_j = self.ps.boundary_neighbors[p_i, j]
+            for j in range(self.ps.solid_neighbors_num[p_i]):
+                p_j = self.ps.solid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
             self.ps.density[p_i] *= self.density_0
@@ -63,8 +64,8 @@ class WCSPHSolver(SPHBase):
             # Boundary neighbors
             dpj = self.ps.pressure[p_i] / self.density_0 ** 2
             ## Akinci2012
-            for j in range(self.ps.boundary_neighbors_num[p_i]):
-                p_j = self.ps.boundary_neighbors[p_i, j]
+            for j in range(self.ps.solid_neighbors_num[p_i]):
+                p_j = self.ps.solid_neighbors[p_i, j]
                 x_j = self.ps.x[p_j]
                 # Compute the pressure force contribution, Symmetric Formula
                 f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
@@ -123,8 +124,8 @@ class WCSPHSolver(SPHBase):
                 boundary_viscosity = 0.0
                 # Boundary neighbors
                 ## Akinci2012
-                for j in range(self.ps.boundary_neighbors_num[p_i]):
-                    p_j = self.ps.boundary_neighbors[p_i, j]
+                for j in range(self.ps.solid_neighbors_num[p_i]):
+                    p_j = self.ps.solid_neighbors[p_i, j]
                     x_j = self.ps.x[p_j]
 
                     r = x_i - x_j

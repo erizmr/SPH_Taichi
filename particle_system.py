@@ -16,7 +16,7 @@ class ParticleSystem:
         self.object_id_collection = dict()
 
         # Material
-        self.material_boundary = 0
+        self.material_solid = 0
         self.material_fluid = 1
 
         self.particle_radius = 0.01  # particle radius
@@ -56,15 +56,15 @@ class ParticleSystem:
         self.fluid_neighbors = ti.field(int)
         self.fluid_neighbors_num = ti.field(int)
 
-        self.boundary_neighbors = ti.field(int)
-        self.boundary_neighbors_num = ti.field(int)
+        self.solid_neighbors = ti.field(int)
+        self.solid_neighbors_num = ti.field(int)
 
         # Allocate memory
         self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
         self.particles_node.place(self.object_id, self.x, self.x_0, self.v, self.acceleration, self.density, self.m_V, self.m, self.pressure, self.material, self.color, self.is_dynamic)
-        self.particles_node.place(self.fluid_neighbors_num, self.boundary_neighbors_num)
+        self.particles_node.place(self.fluid_neighbors_num, self.solid_neighbors_num)
         self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
-        self.particle_node.place(self.fluid_neighbors, self.boundary_neighbors)
+        self.particle_node.place(self.fluid_neighbors, self.solid_neighbors)
 
         index = ti.ij if self.dim == 2 else ti.ijk
         if self.dim == 2:
@@ -171,12 +171,12 @@ class ParticleSystem:
 
     @ti.func
     def is_static_rigid_body(self, p):
-        return self.material[p] == self.material_boundary and (not self.is_dynamic[p])
+        return self.material[p] == self.material_solid and (not self.is_dynamic[p])
 
 
     @ti.func
     def is_dynamic_rigid_body(self, p):
-        return self.material[p] == self.material_boundary and self.is_dynamic[p]
+        return self.material[p] == self.material_solid and self.is_dynamic[p]
 
 
     @ti.kernel
@@ -203,16 +203,16 @@ class ParticleSystem:
                         if self.material[p_j] == self.material_fluid:
                             self.fluid_neighbors[p_i, cnt_fluid] = p_j
                             cnt_fluid += 1
-                        elif self.material[p_j] == self.material_boundary:
-                            self.boundary_neighbors[p_i, cnt_boundary] = p_j
+                        elif self.material[p_j] == self.material_solid:
+                            self.solid_neighbors[p_i, cnt_boundary] = p_j
                             cnt_boundary += 1
             self.fluid_neighbors_num[p_i] = cnt_fluid
-            self.boundary_neighbors_num[p_i] = cnt_boundary
+            self.solid_neighbors_num[p_i] = cnt_boundary
 
     def initialize_particle_system(self):
         self.grid_particles_num.fill(0)
         self.fluid_neighbors.fill(-1)
-        self.boundary_neighbors.fill(-1)
+        self.solid_neighbors.fill(-1)
         self.allocate_particles_to_grid()
         self.search_neighbors()
 
