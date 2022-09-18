@@ -8,7 +8,7 @@ from IISPH import IISPHSolver
 # ti.init(arch=ti.cpu)
 
 # Use GPU for higher peformance if available
-ti.init(arch=ti.cuda, device_memory_fraction=0.5)
+ti.init(arch=ti.cuda, device_memory_fraction=0.5, kernel_profiler=True)
 
 
 if __name__ == "__main__":
@@ -161,6 +161,8 @@ if __name__ == "__main__":
     solver.initialize_solver()
     series_prefix = "output/object_{}_demo_test.ply"
 
+
+    # ti.profiler.clear_kernel_profiler_info()
     while window.running:
         for i in range(substeps):
             solver.step()
@@ -202,3 +204,4 @@ if __name__ == "__main__":
                 cnt_ply += 1
         cnt += 1
         window.show()
+    ti.profiler.print_kernel_profiler_info()
