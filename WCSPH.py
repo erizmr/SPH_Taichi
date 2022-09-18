@@ -10,6 +10,22 @@ class WCSPHSolver(SPHBase):
         self.stiffness = 50000.0
         # self.dt[None] = 3e-4
         self.dt[None] = 1e-3
+    
+
+
+    @ti.func
+    def compute_densities_task(self, p_i, p_j):
+        x_i = self.ps.x[p_i]
+        self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
+        if self.ps.material[p_j] == self.ps.material_fluid:
+            # Fluid neighbors
+            x_j = self.ps.x[p_j]
+            self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+        elif self.ps.material[p_j] == self.ps.material_solid:
+            # Boundary neighbors
+            ## Akinci2012
+            x_j = self.ps.x[p_j]
+            self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
 
 
     @ti.kernel
@@ -18,6 +34,7 @@ class WCSPHSolver(SPHBase):
         for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
+            # self.ps.for_all_neighbors(p_i, self.compute_densities_task)
             x_i = self.ps.x[p_i]
             self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
             # Fluid neighbors
@@ -34,6 +51,16 @@ class WCSPHSolver(SPHBase):
             self.ps.density[p_i] *= self.density_0
 
 
+    # @ti.kernel
+    # def compute_densities(self):
+    #     # for p_i in range(self.ps.particle_num[None]):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.material[p_i] != self.ps.material_fluid:
+    #             continue
+    #         self.ps.for_all_neighbors(p_i, self.compute_densities_task)
+    #         self.ps.density[p_i] *= self.density_0
+
+
     @ti.kernel
     def compute_pressure_forces(self):
         # for p_i in range(self.ps.particle_num[None]):
@@ -42,7 +69,8 @@ class WCSPHSolver(SPHBase):
                 continue
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.is_static_rigid_body(p_i):
                 self.ps.acceleration[p_i].fill(0)
                 continue
