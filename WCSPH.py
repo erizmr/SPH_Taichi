@@ -9,7 +9,7 @@ class WCSPHSolver(SPHBase):
         self.exponent = 7.0
         self.stiffness = 50000.0
         # self.dt[None] = 3e-4
-        self.dt[None] = 3e-4
+        self.dt[None] = 1e-3
 
 
     @ti.kernel
