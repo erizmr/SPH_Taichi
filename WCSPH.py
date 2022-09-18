@@ -9,12 +9,13 @@ class WCSPHSolver(SPHBase):
         self.exponent = 7.0
         self.stiffness = 50000.0
         # self.dt[None] = 3e-4
-        self.dt[None] = 3e-4
+        self.dt[None] = 1e-3
 
 
     @ti.kernel
     def compute_densities(self):
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             x_i = self.ps.x[p_i]
@@ -35,7 +36,8 @@ class WCSPHSolver(SPHBase):
 
     @ti.kernel
     def compute_pressure_forces(self):
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
@@ -79,7 +81,8 @@ class WCSPHSolver(SPHBase):
 
     @ti.kernel
     def compute_non_pressure_forces(self):
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.is_static_rigid_body(p_i):
                 self.ps.acceleration[p_i].fill(0)
                 continue
@@ -143,7 +146,8 @@ class WCSPHSolver(SPHBase):
     @ti.kernel
     def advect(self):
         # Symplectic Euler
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]

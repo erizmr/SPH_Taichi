@@ -120,7 +120,8 @@ class SPHBase:
 
     @ti.kernel
     def enforce_boundary_2D(self, particle_type:int):
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]: 
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0])
@@ -144,7 +145,8 @@ class SPHBase:
 
     @ti.kernel
     def enforce_boundary_3D(self, particle_type:int):
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]:
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0, 0.0])
