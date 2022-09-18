@@ -13,7 +13,6 @@ class WCSPHSolver(SPHBase):
         self.dt[None] = 1e-3
     
 
-
     @ti.func
     def compute_densities_task(self, p_i, p_j, ret: ti.template()):
         x_i = self.ps.x[p_i]
