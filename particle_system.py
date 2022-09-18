@@ -344,16 +344,17 @@ class ParticleSystem:
         self.update_grid_id()
         parallel_prefex_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
         self.counting_sort()
-        self.search_neighbors()
+        # self.search_neighbors()
     
 
     @ti.func
-    def for_all_neighbors(self, p_i, task: ti.template()):
+    def for_all_neighbors(self, p_i, task: ti.template(), ret: ti.template()):
         center_cell = self.pos_to_index(self.x[p_i])
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
             for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                task(p_i, p_j)
+                if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
+                    task(p_i, p_j, ret)
 
     @ti.kernel
     def search_neighbors(self):
