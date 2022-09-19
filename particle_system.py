@@ -118,11 +118,11 @@ class ParticleSystem:
         self.is_dynamic_buffer = ti.field(dtype=int, shape=self.particle_max_num)
 
         # Neighbors information
-        self.fluid_neighbors = ti.field(int, shape=(self.particle_max_num, self.particle_max_num_neighbor))
-        self.fluid_neighbors_num = ti.field(int, shape=self.particle_max_num)
+        # self.fluid_neighbors = ti.field(int, shape=(self.particle_max_num, self.particle_max_num_neighbor))
+        # self.fluid_neighbors_num = ti.field(int, shape=self.particle_max_num)
 
-        self.solid_neighbors = ti.field(int, shape=(self.particle_max_num, self.particle_max_num_neighbor))
-        self.solid_neighbors_num = ti.field(int, shape=self.particle_max_num)
+        # self.solid_neighbors = ti.field(int, shape=(self.particle_max_num, self.particle_max_num_neighbor))
+        # self.solid_neighbors_num = ti.field(int, shape=self.particle_max_num)
 
         self.grid_ids = ti.field(int, shape=self.particle_max_num)
         self.grid_ids_buffer = ti.field(int, shape=self.particle_max_num)
@@ -344,7 +344,6 @@ class ParticleSystem:
         self.update_grid_id()
         parallel_prefex_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
         self.counting_sort()
-        # self.search_neighbors()
     
 
     @ti.func
