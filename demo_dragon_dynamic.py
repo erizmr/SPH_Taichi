@@ -198,7 +198,7 @@ if __name__ == "__main__":
                 obj_id = 0
                 obj_data = ps.dump(obj_id=obj_id)
                 np_pos = obj_data["position"]
-                writer = ti.tools.PLYWriter(num_vertices=ps.object_id_collection[obj_id])
+                writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id])
                 writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                 writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
                 cnt_ply += 1

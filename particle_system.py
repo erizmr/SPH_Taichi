@@ -1,89 +1,85 @@
 import taichi as ti
 import numpy as np
+import trimesh as tm
 from functools import reduce
+from config_builder import SimConfig
 from scan_single_buffer import parallel_prefex_sum_inclusive_inplace
 
 @ti.data_oriented
 class ParticleSystem:
-    def __init__(self, domain_size, GGUI=False):
+    def __init__(self, config: SimConfig,domain_size, GGUI=False):
+        self.cfg = config
         self.GGUI = GGUI
-        self.domain_size = domain_size
+
+        self.domain_start = np.array([0.0, 0.0, 0.0])
+        self.domain_start = np.array(self.cfg.get_cfg("domain_start"))
+
+        self.domain_end = np.array([1.0, 1.0, 1.0])
+        self.domian_end = np.array(self.cfg.get_cfg("domain_end"))
+        
+        self.domain_size = self.domian_end - self.domain_start
+
         self.dim = len(domain_size)
         assert self.dim > 1
-        self.screen_to_world_ratio = 50
-        self.bound = self.domain_size # self.screen_to_world_ratio
-        # All objects id and its particle num
-        self.object_id_collection = dict()
+
 
         # Material
         self.material_solid = 0
         self.material_fluid = 1
 
         self.particle_radius = 0.01  # particle radius
+        self.particle_radius = self.cfg.get_cfg("ParticleRadius")
+
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
-        # self.particle_max_num = 2 ** 17
-        self.particle_max_num = 243000
-        self.particle_max_num_per_cell = 100
-        self.particle_max_num_neighbor = 100
+
+        # self.particle_max_num = 432270
         self.particle_num = ti.field(int, shape=())
 
         # Grid related properties
         self.grid_size = self.support_radius
-        self.grid_num = np.ceil(np.array(self.bound) / self.grid_size).astype(int)
+        self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
         self.padding = self.grid_size
 
+        # All objects id and its particle num
+        self.object_collection = dict()
 
-        # self.grid_particles_num = ti.field(int)
-        # self.grid_particles_num_temp = ti.field(int)
+        #========== Compute number of particles ==========#
+        #### Process Fluid Blocks ####
+        fluid_blocks = self.cfg.get_fluid_blocks()
+        fluid_particle_num = 0
+        for fluid in fluid_blocks:
+            particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
+            fluid["particleNum"] = particle_num
+            self.object_collection[fluid["objectId"]] = fluid
+            fluid_particle_num += particle_num
 
-        # # self.grid_particles = ti.field(int)
+        #### Process Rigid Blocks ####
+        rigid_blocks = self.cfg.get_rigid_blocks()
+        rigid_particle_num = 0
+        for rigid in rigid_blocks:
+            particle_num = self.compute_cube_particle_num(rigid["start"], rigid["end"])
+            rigid["particleNum"] = particle_num
+            self.object_collection[rigid["objectId"]] = rigid
+            rigid_particle_num += particle_num
         
+        #### Process Rigid Bodies ####
+        rigid_bodies = self.cfg.get_rigid_bodies()
+        for rigid_body in rigid_bodies:
+            voxelized_points_np = self.load_rigid_body(rigid_body)
+            rigid_body["particleNum"] = voxelized_points_np.shape[0]
+            self.object_collection[rigid_body["objectId"]] = rigid_body
+            rigid_particle_num += voxelized_points_np.shape[0]
+        
+        self.particle_num[None] = fluid_particle_num + rigid_particle_num
 
-        # # Particle related properties
-        # self.object_id = ti.field(dtype=int)
-        # self.x = ti.Vector.field(self.dim, dtype=float)
-        # self.x_0 = ti.Vector.field(self.dim, dtype=float)
-        # self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=())
+        #### TODO: Handle Particle Emitter ####
+        self.particle_num_max = self.particle_num[None]
 
-        # self.v = ti.Vector.field(self.dim, dtype=float)
-        # self.acceleration = ti.Vector.field(self.dim, dtype=float)
-        # self.m_V = ti.field(dtype=float)
-        # self.m = ti.field(dtype=float)
-        # self.density = ti.field(dtype=float)
-        # self.pressure = ti.field(dtype=float)
-        # self.material = ti.field(dtype=int)
-        # self.color = ti.Vector.field(3, dtype=int)
-        # self.is_dynamic = ti.field(dtype=int)
-
-        # # Buffer for sort
-        # self.object_id_buffer = ti.field(dtype=int)
-        # self.x_buffer = ti.Vector.field(self.dim, dtype=float)
-        # self.x_0_buffer = ti.Vector.field(self.dim, dtype=float)
-        # self.v_buffer = ti.Vector.field(self.dim, dtype=float)
-        # self.acceleration_buffer = ti.Vector.field(self.dim, dtype=float)
-        # self.m_V_buffer = ti.field(dtype=float)
-        # self.m_buffer = ti.field(dtype=float)
-        # self.density_buffer = ti.field(dtype=float)
-        # self.pressure_buffer = ti.field(dtype=float)
-        # self.material_buffer = ti.field(dtype=int)
-        # self.color_buffer = ti.Vector.field(3, dtype=int)
-        # self.is_dynamic_buffer = ti.field(dtype=int)
-
-        # # Neighbors information
-        # self.fluid_neighbors = ti.field(int)
-        # self.fluid_neighbors_num = ti.field(int)
-
-        # self.solid_neighbors = ti.field(int)
-        # self.solid_neighbors_num = ti.field(int)
-
-        # self.grid_ids = ti.field(int)
-        # self.grid_ids_buffer = ti.field(int)
-        # self.grid_ids_new = ti.field(int)
-
-        #=======================================================================================================
+        #========== Allocate memory ==========#
+        # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
         self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))   
 
@@ -117,67 +113,29 @@ class ParticleSystem:
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic_buffer = ti.field(dtype=int, shape=self.particle_max_num)
 
-        # Neighbors information
-        # self.fluid_neighbors = ti.field(int, shape=(self.particle_max_num, self.particle_max_num_neighbor))
-        # self.fluid_neighbors_num = ti.field(int, shape=self.particle_max_num)
-
-        # self.solid_neighbors = ti.field(int, shape=(self.particle_max_num, self.particle_max_num_neighbor))
-        # self.solid_neighbors_num = ti.field(int, shape=self.particle_max_num)
-
+        # Grid id for each particle
         self.grid_ids = ti.field(int, shape=self.particle_max_num)
         self.grid_ids_buffer = ti.field(int, shape=self.particle_max_num)
         self.grid_ids_new = ti.field(int, shape=self.particle_max_num)
-
-        #========================================================================================================
-
-
-        # # Allocate memory
-        # self.particles_node = ti.root.dense(ti.i, self.particle_max_num)
-        # self.particles_node.place(self.object_id, self.x, self.x_0, self.v, self.acceleration, self.density, self.m_V, self.m, self.pressure, self.material, self.color, self.is_dynamic)
-        # self.particles_node.place(self.fluid_neighbors_num, self.solid_neighbors_num, self.grid_ids, self.grid_ids_buffer, self.grid_ids_new)
-
-        # # allocate sort buffer
-        # self.particles_node.place(self.object_id_buffer, self.x_buffer, self.x_0_buffer, self.v_buffer, self.acceleration_buffer, self.density_buffer, self.m_V_buffer, self.m_buffer, self.pressure_buffer, self.material_buffer, self.color_buffer, self.is_dynamic_buffer)
-
-        # self.particle_node = self.particles_node.dense(ti.j, self.particle_max_num_neighbor)
-        # self.particle_node.place(self.fluid_neighbors, self.solid_neighbors)
-
-
-        # #### Flatten ####
-        # if self.dim == 2:
-        #     self.grid_node = ti.root.dense(ti.i, int(self.grid_num[0]*self.grid_num[1]))
-        #     self.grid_node.place(self.grid_particles_num, self.grid_particles_num_temp)
-        # elif self.dim == 3:
-        #     self.grid_node = ti.root.dense(ti.i, int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
-        #     self.grid_node.place(self.grid_particles_num, self.grid_particles_num_temp)
-
-
-        # index = ti.ij if self.dim == 2 else ti.ijk
-        # if self.dim == 2:
-        #     self.grid_node = ti.root.dense(index, self.grid_num)
-        #     self.grid_node.place(self.grid_particles_num, self.grid_particles_num_temp)
-        # elif self.dim == 3:
-        #     # self.grid_node = ti.root.pointer(index, self.grid_num)
-        #     self.grid_node = ti.root.dense(index, self.grid_num)
-        #     self.grid_node.place(self.grid_particles_num, self.grid_particles_num_temp)
-
-        # cell_index = ti.k if self.dim == 2 else ti.l
-        # if self.dim == 2:
-        #     cell_node = self.grid_node.dense(cell_index, self.particle_max_num_per_cell)
-        #     cell_node.place(self.grid_particles)
-        # elif self.dim == 3:
-        #     self.grid_node.dense(cell_index, self.particle_max_num_per_cell).place(self.grid_particles)
-
-        # self.x_vis_buffer = None
-        # if self.GGUI:
-        #     self.x_vis_buffer = ti.Vector.field(self.dim, dtype=float)
-        #     self.color_vis_buffer = ti.Vector.field(3, dtype=float)
-        #     self.particles_node.place(self.x_vis_buffer, self.color_vis_buffer)
 
         self.x_vis_buffer = None
         if self.GGUI:
             self.x_vis_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
             self.color_vis_buffer = ti.Vector.field(3, dtype=float, shape=self.particle_max_num)
+
+
+        # Initialize particles
+        for fluid in fluid_blocks:
+            obj_id = fluid["objectId"]
+
+            # self.add_cube(object_id=0,
+            #               lower_corner=[0.1+x_offset, 0.1 + y_offset, 0.5+z_offset],
+            #               cube_size=[1.1, 2.8, 1.1],
+            #               velocity=[0.0, -1.0, 0.0],
+            #               density=1000.0,
+            #               is_dynamic=1,
+            #               color=(50,100,200),
+            #               material=1)
 
     @ti.func
     def add_particle(self, p, obj_id, x, v, density, pressure, material, is_dynamic, color):
@@ -204,10 +162,10 @@ class ParticleSystem:
                       new_particles_is_dynamic: ti.types.ndarray(),
                       new_particles_color: ti.types.ndarray()
                       ):
-        if object_id in self.object_id_collection:
-            self.object_id_collection[object_id] += new_particles_num
+        if object_id in self.object_collection:
+            self.object_collection[object_id] += new_particles_num
         else:
-            self.object_id_collection[object_id] = new_particles_num
+            self.object_collection[object_id] = new_particles_num
         
         self._add_particles(object_id,
                       new_particles_num,
@@ -355,29 +313,29 @@ class ParticleSystem:
                 if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
                     task(p_i, p_j, ret)
 
-    @ti.kernel
-    def search_neighbors(self):
-        # for p_i in range(self.particle_num[None]):
-        for p_i in ti.grouped(self.x):
-            center_cell = self.pos_to_index(self.x[p_i])
-            cnt_fluid = 0
-            cnt_boundary = 0
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
-                if cnt_fluid + cnt_boundary >= self.particle_max_num_neighbor:
-                    break
-                cell = center_cell + offset
-                grid_index = self.flatten_grid_index(cell)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                    distance = (self.x[p_i] - self.x[p_j]).norm()
-                    if p_i[0] != p_j and distance < self.support_radius:
-                        if self.material[p_j] == self.material_fluid:
-                            self.fluid_neighbors[p_i, cnt_fluid] = p_j
-                            cnt_fluid += 1
-                        elif self.material[p_j] == self.material_solid:
-                            self.solid_neighbors[p_i, cnt_boundary] = p_j
-                            cnt_boundary += 1
-            self.fluid_neighbors_num[p_i] = cnt_fluid
-            self.solid_neighbors_num[p_i] = cnt_boundary
+    # @ti.kernel
+    # def search_neighbors(self):
+    #     # for p_i in range(self.particle_num[None]):
+    #     for p_i in ti.grouped(self.x):
+    #         center_cell = self.pos_to_index(self.x[p_i])
+    #         cnt_fluid = 0
+    #         cnt_boundary = 0
+    #         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+    #             if cnt_fluid + cnt_boundary >= self.particle_max_num_neighbor:
+    #                 break
+    #             cell = center_cell + offset
+    #             grid_index = self.flatten_grid_index(cell)
+    #             for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+    #                 distance = (self.x[p_i] - self.x[p_j]).norm()
+    #                 if p_i[0] != p_j and distance < self.support_radius:
+    #                     if self.material[p_j] == self.material_fluid:
+    #                         self.fluid_neighbors[p_i, cnt_fluid] = p_j
+    #                         cnt_fluid += 1
+    #                     elif self.material[p_j] == self.material_solid:
+    #                         self.solid_neighbors[p_i, cnt_boundary] = p_j
+    #                         cnt_boundary += 1
+    #         self.fluid_neighbors_num[p_i] = cnt_fluid
+    #         self.solid_neighbors_num[p_i] = cnt_boundary
 
     # @ti.kernel
     # def search_neighbors(self):
@@ -422,7 +380,7 @@ class ParticleSystem:
             np_arr[i] = src_arr[i]
     
     def copy_to_vis_buffer(self, invisible_objects=[]):
-        for obj_id in self.object_id_collection:
+        for obj_id in self.object_collection:
             if obj_id not in invisible_objects:
                 self._copy_to_vis_buffer(obj_id)
 
@@ -456,26 +414,64 @@ class ParticleSystem:
     #         'color': np_color
     #     }
     
+    # def dump(self, obj_id):
+    #     particle_num = self.object_collection[obj_id]
+    #     np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
+    #     self.copy_to_numpy_nd(obj_id, np_x, self.x)
+
+    #     np_v = np.ndarray((particle_num, self.dim), dtype=np.float32)
+    #     self.copy_to_numpy_nd(obj_id, np_v, self.v)
+
+    #     np_material = np.ndarray((particle_num,), dtype=np.int32)
+    #     self.copy_to_numpy(obj_id, np_material, self.material)
+
+    #     np_color = np.ndarray((particle_num,), dtype=np.int32)
+    #     self.copy_to_numpy(obj_id, np_color, self.color)
+
+    #     return {
+    #         'position': np_x,
+    #         'velocity': np_v,
+    #         'material': np_material,
+    #         'color': np_color
+    #     }
+
     def dump(self, obj_id):
-        particle_num = self.object_id_collection[obj_id]
+        particle_num = self.object_collection[obj_id]
         np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(obj_id, np_x, self.x)
 
         np_v = np.ndarray((particle_num, self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(obj_id, np_v, self.v)
 
-        np_material = np.ndarray((particle_num,), dtype=np.int32)
-        self.copy_to_numpy(obj_id, np_material, self.material)
-
-        np_color = np.ndarray((particle_num,), dtype=np.int32)
-        self.copy_to_numpy(obj_id, np_color, self.color)
-
         return {
             'position': np_x,
-            'velocity': np_v,
-            'material': np_material,
-            'color': np_color
+            'velocity': np_v
         }
+    
+
+    def load_rigid_body(self, rigid_body):
+        mesh = tm.load(rigid_body["geometryFile"])
+        mesh.apply_scale(rigid_body["scale"])
+        offset = np.array(rigid_body["translation"])
+        is_success = tm.repair.fill_holes(mesh)
+        print("Is the mesh successfully repaired? ", is_success)
+        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
+        # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
+        # voxelized_mesh.show()
+        voxelized_points_np = voxelized_mesh.points + offset
+        return voxelized_points_np
+        # num_particles_obj = voxelized_points_np.shape[0]
+        # voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)
+        # voxelized_points.from_numpy(voxelized_points_np)
+
+
+    def compute_cube_particle_num(self, start, end):
+        num_dim = []
+        for i in range(self.dim):
+            num_dim.append(
+                np.arange(start[i], end[i], self.particle_diameter))
+        return reduce(lambda x, y: x * y,
+                                   [len(n) for n in num_dim])
 
     def add_cube(self,
                  object_id,
@@ -496,6 +492,7 @@ class ParticleSystem:
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         print('particle num ', num_new_particles)
+        print('current particle num ', self.particle_num[None] + num_new_particles)
         assert self.particle_num[
                    None] + num_new_particles <= self.particle_max_num
 

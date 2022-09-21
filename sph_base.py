@@ -72,7 +72,7 @@ class SPHBase:
     def initialize_solver(self):
         self.ps.initialize_particle_system()
         # self.compute_rigid_rest_cm()
-        # self.compute_static_boundary_volume()
+        self.compute_static_boundary_volume()
         # self.compute_moving_boundary_volume()
 
     @ti.kernel
@@ -81,18 +81,23 @@ class SPHBase:
 
     @ti.kernel
     def compute_static_boundary_volume(self):
-        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] != self.ps.material_solid:
                 continue
             x_i = self.ps.x[p_i]
             delta = self.cubic_kernel(0.0)
-            for j in range(self.ps.solid_neighbors_num[p_i]):
-                p_j = self.ps.solid_neighbors[p_i, j]
-                x_j = self.ps.x[p_j]
-                delta += self.cubic_kernel((x_i - x_j).norm())
+            # for j in range(self.ps.solid_neighbors_num[p_i]):
+            #     p_j = self.ps.solid_neighbors[p_i, j]
+            #     x_j = self.ps.x[p_j]
+            #     delta += self.cubic_kernel((x_i - x_j).norm())
+            self.ps.for_all_neighbors(p_i, self.compute_static_boundary_volume_task, delta)
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
-            # print(self.ps.m_V0, " ", self.ps.m_V[p_i])
-    
+
+    @ti.func
+    def compute_static_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
+        delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
+
 
     @ti.kernel
     def compute_moving_boundary_volume(self):

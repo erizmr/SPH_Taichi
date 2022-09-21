@@ -1,0 +1,44 @@
+{
+	"Configuration": 
+	{
+        "domainStart": [0.0, 0.0, 0.0],
+        "domianEnd": [5.0, 3.0, 2.0],
+		"particleRadius": 0.01,
+		"numberOfStepsPerRenderUpdate": 1,
+		"density0": 1000, 
+		"simulationMethod": 0,
+		"gravitation": [0,-9.81,0], 
+		"stiffness": 50000,
+		"exponent": 7,
+		"boundaryHandlingMethod": 0
+	},
+	"Materials": [
+		{
+			"id": "Fluid",
+			"viscosity": 0.01,
+			"viscosityMethod": 1, 
+			"colorMapType": 1
+		}
+	],
+	"RigidBodies": [
+		{
+            "objectId": 1,
+			"geometryFile": "../models/Dragon_50k.obj",
+			"translation": [1.5, 0.0, 1.0],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0,
+			"scale": [1, 1, 1], 
+			"color": [0.1, 0.4, 0.6, 1.0], 
+			"isDynamic": false
+		}
+	],
+	"FluidBlocks": [
+		{
+            "objectId": 0,
+			"start": [-0.5, 0.0, -0.5],
+			"end": [0.5, 1.0, 0.5],
+			"translation": [-2.45, 0.0, 0.0],
+			"scale": [1, 2, 1]
+		}
+	]
+}

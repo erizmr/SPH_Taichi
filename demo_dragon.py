@@ -12,7 +12,7 @@ ti.init(arch=ti.cuda, device_memory_fraction=0.5)
 
 
 if __name__ == "__main__":
-    x_max = 5.0
+    x_max = 5.0 
     y_max = 3.0
     z_max = 2.0
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     ps = ParticleSystem(domain_size, GGUI=True)
 
     x_offset = 0.2
-    y_offset = 0.2
+    y_offset = 0.0
     z_offset = 0.2
 
     mesh = tm.load("./data/Dragon_50k.obj")
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # mesh = tm.load("./data/bunny.stl")
     mesh_scale = 1
     mesh.apply_scale(mesh_scale)
-    offset = np.array([3.5, 0.0 + y_offset, 1.0])
+    offset = np.array([3.5, 0.05, 1.0])
     is_success = tm.repair.fill_holes(mesh)
     print("Is the mesh successfully repaired? ", is_success)
     # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
@@ -77,62 +77,62 @@ if __name__ == "__main__":
     # Fluid -1 
     ps.add_cube(object_id=0,
                 lower_corner=[0.1+x_offset, 0.1 + y_offset, 0.5+z_offset],
-                cube_size=[0.6, 2.0, 0.6],
+                cube_size=[1.1, 2.8, 1.1],
                 velocity=[0.0, -1.0, 0.0],
                 density=1000.0,
                 is_dynamic=1,
                 color=(50,100,200),
                 material=1)
 
-    # Bottom boundary
-    ps.add_cube(object_id=1,
-                lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[x_max-x_offset*2, ps.particle_diameter-0.001, z_max-z_offset*2],
-                velocity=[0.0, 0.0, 0.0],
-                density=1000.0,
-                is_dynamic=0,
-                color=(255,255,255),
-                material=0)
+    # # Bottom boundary
+    # ps.add_cube(object_id=1,
+    #             lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
+    #             cube_size=[x_max-x_offset*2, ps.particle_diameter-0.001, z_max-z_offset*2],
+    #             velocity=[0.0, 0.0, 0.0],
+    #             density=1000.0,
+    #             is_dynamic=0,
+    #             color=(255,255,255),
+    #             material=0)
     
-    # left boundary
-    ps.add_cube(object_id=1, 
-                lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
-                velocity=[0.0, 0.0, 0.0],
-                density=1000.0,
-                is_dynamic=0,
-                color=(255,255,255),
-                material=0)
+    # # left boundary
+    # ps.add_cube(object_id=1, 
+    #             lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
+    #             cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
+    #             velocity=[0.0, 0.0, 0.0],
+    #             density=1000.0,
+    #             is_dynamic=0,
+    #             color=(255,255,255),
+    #             material=0)
     
-    # back
-    ps.add_cube(object_id=1,
-                lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
-                velocity=[0.0, 0.0, 0.0],
-                density=1000.0,
-                is_dynamic=0,
-                color=(255,255,255),
-                material=0)
+    # # back
+    # ps.add_cube(object_id=1,
+    #             lower_corner=[0.0+x_offset, 0.0 + y_offset, 0.0+z_offset],
+    #             cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
+    #             velocity=[0.0, 0.0, 0.0],
+    #             density=1000.0,
+    #             is_dynamic=0,
+    #             color=(255,255,255),
+    #             material=0)
     
-    # front
-    ps.add_cube(object_id=1,
-                lower_corner=[0.0+x_offset, 0.0 + y_offset, z_max - z_offset],
-                cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
-                velocity=[0.0, 0.0, 0.0],
-                density=1000.0,
-                is_dynamic=0,
-                color=(255,255,255),
-                material=0)
+    # # front
+    # ps.add_cube(object_id=1,
+    #             lower_corner=[0.0+x_offset, 0.0 + y_offset, z_max - z_offset],
+    #             cube_size=[x_max-x_offset*2, y_max-y_offset*2, ps.particle_diameter-0.001],
+    #             velocity=[0.0, 0.0, 0.0],
+    #             density=1000.0,
+    #             is_dynamic=0,
+    #             color=(255,255,255),
+    #             material=0)
     
-    # right
-    ps.add_cube(object_id=1,
-                lower_corner=[x_max-x_offset, 0.0 + y_offset, 0.0+z_offset],
-                cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
-                velocity=[0.0, 0.0, 0.0],
-                density=1000.0,
-                is_dynamic=0,
-                color=(255,255,255),
-                material=0)
+    # # right
+    # ps.add_cube(object_id=1,
+    #             lower_corner=[x_max-x_offset, 0.0 + y_offset, 0.0+z_offset],
+    #             cube_size=[ps.particle_diameter-0.001, y_max-y_offset*2, z_max-z_offset*2],
+    #             velocity=[0.0, 0.0, 0.0],
+    #             density=1000.0,
+    #             is_dynamic=0,
+    #             color=(255,255,255),
+    #             material=0)
         
     if solver_type == "WCSPH":
         solver = WCSPHSolver(ps)
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         solver = IISPHSolver(ps)
 
 
-    window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=True)
+    window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)
 
     scene = ti.ui.Scene()
     camera = ti.ui.make_camera()
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
     solver.initialize_solver()
-    series_prefix = "output/object_{}_demo_test.ply"
+    series_prefix = "dragon_bath_output/object_{}_demo_test.ply"
 
     while window.running:
         for i in range(substeps):
@@ -189,16 +189,18 @@ if __name__ == "__main__":
             canvas.scene(scene)
     
         if output_frames:
-            if cnt % 20 == 0:
-                window.write_image(f"img_output/{cnt:04}.png")
+            if cnt % 100 == 0:
+                window.write_image(f"dragon_bath_output_img/{cnt:06}.png")
         if output_ply:
-            if cnt % 20 == 0:
+            if cnt % 100 == 0:
                 obj_id = 0
                 obj_data = ps.dump(obj_id=obj_id)
                 np_pos = obj_data["position"]
-                writer = ti.tools.PLYWriter(num_vertices=ps.object_id_collection[obj_id])
+                writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id])
                 writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                 writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
                 cnt_ply += 1
         cnt += 1
+        if cnt > 35000:
+            break
         window.show()
