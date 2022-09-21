@@ -7,19 +7,19 @@ from scan_single_buffer import parallel_prefex_sum_inclusive_inplace
 
 @ti.data_oriented
 class ParticleSystem:
-    def __init__(self, config: SimConfig,domain_size, GGUI=False):
+    def __init__(self, config: SimConfig, GGUI=False):
         self.cfg = config
         self.GGUI = GGUI
 
         self.domain_start = np.array([0.0, 0.0, 0.0])
-        self.domain_start = np.array(self.cfg.get_cfg("domain_start"))
+        self.domain_start = np.array(self.cfg.get_cfg("domainStart"))
 
         self.domain_end = np.array([1.0, 1.0, 1.0])
-        self.domian_end = np.array(self.cfg.get_cfg("domain_end"))
+        self.domian_end = np.array(self.cfg.get_cfg("domainEnd"))
         
         self.domain_size = self.domian_end - self.domain_start
 
-        self.dim = len(domain_size)
+        self.dim = len(self.domain_size)
         assert self.dim > 1
 
 
@@ -28,7 +28,7 @@ class ParticleSystem:
         self.material_fluid = 1
 
         self.particle_radius = 0.01  # particle radius
-        self.particle_radius = self.cfg.get_cfg("ParticleRadius")
+        self.particle_radius = self.cfg.get_cfg("particleRadius")
 
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
@@ -70,13 +70,15 @@ class ParticleSystem:
         for rigid_body in rigid_bodies:
             voxelized_points_np = self.load_rigid_body(rigid_body)
             rigid_body["particleNum"] = voxelized_points_np.shape[0]
+            rigid_body["voxelizedPoints"] = voxelized_points_np
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
         
         self.particle_num[None] = fluid_particle_num + rigid_particle_num
 
         #### TODO: Handle Particle Emitter ####
-        self.particle_num_max = self.particle_num[None]
+        self.particle_max_num = self.particle_num[None]
+        print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
 
         #========== Allocate memory ==========#
         # Particle num of each grid
@@ -124,18 +126,45 @@ class ParticleSystem:
             self.color_vis_buffer = ti.Vector.field(3, dtype=float, shape=self.particle_max_num)
 
 
-        # Initialize particles
+        #========== Initialize particles ==========#
+
+        # Fluid block
         for fluid in fluid_blocks:
             obj_id = fluid["objectId"]
+            offset = np.array(fluid["translation"])
+            start = np.array(fluid["start"]) + offset
+            end = np.array(fluid["end"]) + offset
+            scale = np.array(fluid["scale"])
+            velocity = fluid["velocity"]
+            density = fluid["density"]
+            color = fluid["color"]
+            self.add_cube(object_id=obj_id,
+                          lower_corner=start,
+                          cube_size=(end-start)*scale,
+                          velocity=velocity,
+                          density=density, 
+                          is_dynamic=1, # enforce fluid dynamic
+                          color=color,
+                          material=1) # 1 indicates fluid
 
-            # self.add_cube(object_id=0,
-            #               lower_corner=[0.1+x_offset, 0.1 + y_offset, 0.5+z_offset],
-            #               cube_size=[1.1, 2.8, 1.1],
-            #               velocity=[0.0, -1.0, 0.0],
-            #               density=1000.0,
-            #               is_dynamic=1,
-            #               color=(50,100,200),
-            #               material=1)
+        # Rigid bodies
+        for rigid_body in rigid_bodies:
+            obj_id = rigid_body["objectId"]
+            num_particles_obj = rigid_body["particleNum"]
+            voxelized_points_np = rigid_body["voxelizedPoints"]
+            is_dynamic = rigid_body["isDynamic"]
+            velocity = np.array(rigid_body["velocity"])
+            density = rigid_body["density"]
+            color = np.array(rigid_body["color"])
+            self.add_particles(obj_id,
+                    num_particles_obj,
+                    voxelized_points_np, # position
+                    velocity * np.ones((num_particles_obj, 3)), # velocity
+                    density * np.ones(num_particles_obj), # density
+                    np.zeros(num_particles_obj), # pressure
+                    np.array([0 for _ in range(num_particles_obj)], dtype=int), # material is solid
+                    is_dynamic * np.ones(num_particles_obj), # is_dynamic
+                    color * np.ones((num_particles_obj, 3))) # color
 
     @ti.func
     def add_particle(self, p, obj_id, x, v, density, pressure, material, is_dynamic, color):
@@ -162,10 +191,10 @@ class ParticleSystem:
                       new_particles_is_dynamic: ti.types.ndarray(),
                       new_particles_color: ti.types.ndarray()
                       ):
-        if object_id in self.object_collection:
-            self.object_collection[object_id] += new_particles_num
-        else:
-            self.object_collection[object_id] = new_particles_num
+        # if object_id in self.object_collection:
+        #     self.object_collection[object_id] += new_particles_num
+        # else:
+        #     self.object_collection[object_id] = new_particles_num
         
         self._add_particles(object_id,
                       new_particles_num,
@@ -492,9 +521,9 @@ class ParticleSystem:
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         print('particle num ', num_new_particles)
-        print('current particle num ', self.particle_num[None] + num_new_particles)
-        assert self.particle_num[
-                   None] + num_new_particles <= self.particle_max_num
+        # print('current particle num ', self.particle_num[None] + num_new_particles)
+        # assert self.particle_num[
+        #            None] + num_new_particles <= self.particle_max_num
 
         new_positions = np.array(np.meshgrid(*num_dim,
                                              sparse=False,

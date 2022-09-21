@@ -4,7 +4,7 @@ import math
 import time
 import random
 
-from torch import rand
+# from torch import rand
 
 
 @ti.func

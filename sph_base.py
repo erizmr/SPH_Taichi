@@ -130,16 +130,16 @@ class SPHBase:
             if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]: 
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0])
-                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                if pos[0] > self.ps.domain_size[0] - self.ps.padding:
                     collision_normal[0] += 1.0
-                    self.ps.x[p_i][0] = self.ps.bound[0] - self.ps.padding
+                    self.ps.x[p_i][0] = self.ps.domain_size[0] - self.ps.padding
                 if pos[0] <= self.ps.padding:
                     collision_normal[0] += -1.0
                     self.ps.x[p_i][0] = self.ps.padding
 
-                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                if pos[1] > self.ps.domain_size[1] - self.ps.padding:
                     collision_normal[1] += 1.0
-                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                    self.ps.x[p_i][1] = self.ps.domain_size[1] - self.ps.padding
                 if pos[1] <= self.ps.padding:
                     collision_normal[1] += -1.0
                     self.ps.x[p_i][1] = self.ps.padding
@@ -155,23 +155,23 @@ class SPHBase:
             if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]:
                 pos = self.ps.x[p_i]
                 collision_normal = ti.Vector([0.0, 0.0, 0.0])
-                if pos[0] > self.ps.bound[0] - self.ps.padding:
+                if pos[0] > self.ps.domain_size[0] - self.ps.padding:
                     collision_normal[0] += 1.0
-                    self.ps.x[p_i][0] = self.ps.bound[0] - self.ps.padding
+                    self.ps.x[p_i][0] = self.ps.domain_size[0] - self.ps.padding
                 if pos[0] <= self.ps.padding:
                     collision_normal[0] += -1.0
                     self.ps.x[p_i][0] = self.ps.padding
 
-                if pos[1] > self.ps.bound[1] - self.ps.padding:
+                if pos[1] > self.ps.domain_size[1] - self.ps.padding:
                     collision_normal[1] += 1.0
-                    self.ps.x[p_i][1] = self.ps.bound[1] - self.ps.padding
+                    self.ps.x[p_i][1] = self.ps.domain_size[1] - self.ps.padding
                 if pos[1] <= self.ps.padding:
                     collision_normal[1] += -1.0
                     self.ps.x[p_i][1] = self.ps.padding
 
-                if pos[2] > self.ps.bound[2] - self.ps.padding:
+                if pos[2] > self.ps.domain_size[2] - self.ps.padding:
                     collision_normal[2] += 1.0
-                    self.ps.x[p_i][2] = self.ps.bound[2] - self.ps.padding
+                    self.ps.x[p_i][2] = self.ps.domain_size[2] - self.ps.padding
                 if pos[2] <= self.ps.padding:
                     collision_normal[2] += -1.0
                     self.ps.x[p_i][2] = self.ps.padding

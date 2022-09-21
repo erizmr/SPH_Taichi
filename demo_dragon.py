@@ -1,6 +1,7 @@
 import taichi as ti
 import numpy as np
 import trimesh as tm
+from config_builder import SimConfig
 from particle_system import ParticleSystem
 from WCSPH import WCSPHSolver
 from IISPH import IISPHSolver
@@ -8,7 +9,7 @@ from IISPH import IISPHSolver
 # ti.init(arch=ti.cpu)
 
 # Use GPU for higher peformance if available
-ti.init(arch=ti.cuda, device_memory_fraction=0.5)
+ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
 
 if __name__ == "__main__":
@@ -40,49 +41,52 @@ if __name__ == "__main__":
     output_ply = False
     solver_type = "WCSPH"
     # solver_type = "IISPH"
-    ps = ParticleSystem(domain_size, GGUI=True)
 
-    x_offset = 0.2
-    y_offset = 0.0
-    z_offset = 0.2
 
-    mesh = tm.load("./data/Dragon_50k.obj")
-    # mesh = tm.load("./data/bunny_sparse.obj")
-    # mesh = tm.load("./data/bunny.stl")
-    mesh_scale = 1
-    mesh.apply_scale(mesh_scale)
-    offset = np.array([3.5, 0.05, 1.0])
-    is_success = tm.repair.fill_holes(mesh)
-    print("Is the mesh successfully repaired? ", is_success)
-    # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
-    voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
-    # voxelized_mesh.show()
-    voxelized_points_np = voxelized_mesh.points + offset
-    num_particles_obj = voxelized_points_np.shape[0]
-    voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)
-    voxelized_points.from_numpy(voxelized_points_np)
+    config = SimConfig(scene_file_path="./data/scenes/dragon_bath.json")
+    ps = ParticleSystem(config=config, GGUI=True)
 
-    print("Rigid body, num of particles: ", num_particles_obj)
+    # x_offset = 0.2
+    # y_offset = 0.0
+    # z_offset = 0.2
 
-    ps.add_particles(2,
-                     num_particles_obj,
-                     voxelized_points_np, # position
-                     0.0 * np.ones((num_particles_obj, 3)), # velocity
-                     10 * np.ones(num_particles_obj), # density
-                     np.zeros(num_particles_obj), # pressure
-                     np.array([0 for _ in range(num_particles_obj)], dtype=int), # material
-                     0 * np.ones(num_particles_obj), # is_dynamic
-                     255 * np.ones((num_particles_obj, 3))) # color
+    # mesh = tm.load("./data/Dragon_50k.obj")
+    # # mesh = tm.load("./data/bunny_sparse.obj")
+    # # mesh = tm.load("./data/bunny.stl")
+    # mesh_scale = 1
+    # mesh.apply_scale(mesh_scale)
+    # offset = np.array([3.5, 0.05, 1.0])
+    # is_success = tm.repair.fill_holes(mesh)
+    # print("Is the mesh successfully repaired? ", is_success)
+    # # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).fill()
+    # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
+    # # voxelized_mesh.show()
+    # voxelized_points_np = voxelized_mesh.points + offset
+    # num_particles_obj = voxelized_points_np.shape[0]
+    # voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)
+    # voxelized_points.from_numpy(voxelized_points_np)
+
+    # print("Rigid body, num of particles: ", num_particles_obj)
+
+    # ps.add_particles(2,
+    #                  num_particles_obj,
+    #                  voxelized_points_np, # position
+    #                  0.0 * np.ones((num_particles_obj, 3)), # velocity
+    #                  10 * np.ones(num_particles_obj), # density
+    #                  np.zeros(num_particles_obj), # pressure
+    #                  np.array([0 for _ in range(num_particles_obj)], dtype=int), # material
+    #                  0 * np.ones(num_particles_obj), # is_dynamic
+    #                  255 * np.ones((num_particles_obj, 3))) # color
 
     # Fluid -1 
-    ps.add_cube(object_id=0,
-                lower_corner=[0.1+x_offset, 0.1 + y_offset, 0.5+z_offset],
-                cube_size=[1.1, 2.8, 1.1],
-                velocity=[0.0, -1.0, 0.0],
-                density=1000.0,
-                is_dynamic=1,
-                color=(50,100,200),
-                material=1)
+    # ps.add_cube(object_id=0,
+    #             lower_corner=[0.1+x_offset, 0.1 + y_offset, 0.5+z_offset],
+    #             cube_size=[1.1, 2.8, 1.1],
+    #             velocity=[0.0, -1.0, 0.0],
+    #             density=1000.0,
+    #             is_dynamic=1,
+    #             color=(50,100,200),
+    #             material=1)
 
     # # Bottom boundary
     # ps.add_cube(object_id=1,
@@ -164,7 +168,7 @@ if __name__ == "__main__":
     while window.running:
         for i in range(substeps):
             solver.step()
-        ps.copy_to_vis_buffer(invisible_objects=[1])
+        ps.copy_to_vis_buffer(invisible_objects=[2])
         if ps.dim == 2:
             canvas.set_background_color(background_color)
             canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius / 5, color=particle_color)

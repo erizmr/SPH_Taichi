@@ -10,7 +10,7 @@ class WCSPHSolver(SPHBase):
         self.stiffness = 50000.0
         self.surface_tension = 0.01
         # self.dt[None] = 3e-4
-        self.dt[None] = 1e-4
+        self.dt[None] = 3e-4
     
 
     @ti.func

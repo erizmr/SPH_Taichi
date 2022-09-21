@@ -20,17 +20,13 @@ class SimConfig:
             return []
     
     def get_rigid_blocks(self):
-        if "RigidBlocks":
+        if "RigidBlocks" in self.config:
             return self.config["RigidBlocks"]
         else:
             return []
     
     def get_fluid_blocks(self):
-        if "FluidBlocks":
+        if "FluidBlocks" in self.config:
             return self.config["FluidBlocks"]
         else:
             return []
-
-
-scene_file_path = "./data/scenes/dambreak_dragon.json"
-SimConfig(scene_file_path=scene_file_path)
