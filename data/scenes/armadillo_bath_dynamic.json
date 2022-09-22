@@ -7,7 +7,7 @@
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000, 
 		"simulationMethod": 0,
-		"gravitation": [0,-9.81,0],
+		"gravitation": [0.0, -9.81, 0.0],
 		"timeStepSize": 0.0004,
 		"stiffness": 50000,
 		"exponent": 7,
@@ -27,10 +27,10 @@
 			"geometryFile": "./data/models/armadillo_small.obj",
 			"translation": [3.0, 2.5, 1.2],
 			"rotationAxis": [0, 1, 0],
-			"rotationAngle": 0,
+			"rotationAngle": 180,
 			"scale": [0.25, 0.25, 0.25],
-			"velocity": [0.0, 0.0, 0.0],
-			"density": 100.0,
+			"velocity": [0.0, -2.0, 0.0],
+			"density": 2000.0,
 			"color": [255, 255, 255], 
 			"isDynamic": true
 		}
@@ -38,9 +38,9 @@
 	"FluidBlocks": [
 		{
             "objectId": 0,
-			"start": [0.0, 0.0, 0.0],
-			"end": [3.90, 1.95, 1.90],
-			"translation": [0.05, 0.05, 0.05],
+			"start": [0.05, 0.05, 0.05],
+			"end": [3.94, 1.90, 1.94],
+			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
 			"density": 1000.0,

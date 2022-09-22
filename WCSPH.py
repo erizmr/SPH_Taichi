@@ -6,7 +6,7 @@ class WCSPHSolver(SPHBase):
     def __init__(self, particle_system):
         super().__init__(particle_system)
         # Pressure state function parameters(WCSPH)
-        self.exponent = 7.0 # Default value
+        self.exponent = 7.0
         self.exponent = self.ps.cfg.get_cfg("exponent")
 
         self.stiffness = 50000.0
@@ -40,19 +40,6 @@ class WCSPHSolver(SPHBase):
             den = 0.0
             self.ps.for_all_neighbors(p_i, self.compute_densities_task, den)
             self.ps.density[p_i] += den
-            # x_i = self.ps.x[p_i]
-            # self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
-            # # Fluid neighbors
-            # for j in range(self.ps.fluid_neighbors_num[p_i]):
-            #     p_j = self.ps.fluid_neighbors[p_i, j]
-            #     x_j = self.ps.x[p_j]
-            #     self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
-            # # Boundary neighbors
-            # ## Akinci2012
-            # for j in range(self.ps.solid_neighbors_num[p_i]):
-            #     p_j = self.ps.solid_neighbors[p_i, j]
-            #     x_j = self.ps.x[p_j]
-            #     self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
             self.ps.density[p_i] *= self.density_0
     
 
@@ -189,7 +176,7 @@ class WCSPHSolver(SPHBase):
     def compute_non_pressure_forces(self):
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_static_rigid_body(p_i):
-                self.ps.acceleration[p_i].fill(0)
+                self.ps.acceleration[p_i].fill(0.0)
                 continue
             ############## Body force ###############
             # Add body force
