@@ -3,6 +3,7 @@ import numpy as np
 import trimesh as tm
 from functools import reduce
 from config_builder import SimConfig
+from WCSPH import WCSPHSolver
 from scan_single_buffer import parallel_prefex_sum_inclusive_inplace
 
 @ti.data_oriented
@@ -34,7 +35,6 @@ class ParticleSystem:
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
 
-        # self.particle_max_num = 432270
         self.particle_num = ti.field(int, shape=())
 
         # Grid related properties
@@ -74,10 +74,10 @@ class ParticleSystem:
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
         
-        self.particle_num[None] = fluid_particle_num + rigid_particle_num
+        self.particle_max_num = fluid_particle_num + rigid_particle_num
 
-        #### TODO: Handle Particle Emitter ####
-        self.particle_max_num = self.particle_num[None]
+        #### TODO: Handle the Particle Emitter ####
+        # self.particle_max_num += emitted particles
         print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
 
         #========== Allocate memory ==========#
@@ -146,6 +146,8 @@ class ParticleSystem:
                           is_dynamic=1, # enforce fluid dynamic
                           color=color,
                           material=1) # 1 indicates fluid
+        
+        # TODO: Handle rigid block
 
         # Rigid bodies
         for rigid_body in rigid_bodies:
@@ -157,14 +159,22 @@ class ParticleSystem:
             density = rigid_body["density"]
             color = np.array(rigid_body["color"])
             self.add_particles(obj_id,
-                    num_particles_obj,
-                    voxelized_points_np, # position
-                    velocity * np.ones((num_particles_obj, 3)), # velocity
-                    density * np.ones(num_particles_obj), # density
-                    np.zeros(num_particles_obj), # pressure
-                    np.array([0 for _ in range(num_particles_obj)], dtype=int), # material is solid
-                    is_dynamic * np.ones(num_particles_obj), # is_dynamic
-                    color * np.ones((num_particles_obj, 3))) # color
+                               num_particles_obj,
+                               voxelized_points_np, # position
+                               velocity * np.ones((num_particles_obj, 3)), # velocity
+                               density * np.ones(num_particles_obj), # density
+                               np.zeros(num_particles_obj), # pressure
+                               np.array([0 for _ in range(num_particles_obj)], dtype=int), # material is solid
+                               is_dynamic * np.ones(num_particles_obj), # is_dynamic
+                               color * np.ones((num_particles_obj, 3))) # color
+    
+
+    def build_solver(self):
+        solver_type = self.cfg.get_cfg("simulationMethod")
+        if solver_type == 0:
+            return WCSPHSolver(self)
+        else:
+            raise NotImplementedError(f"Solver type {solver_type} has not been implemented.")
 
     @ti.func
     def add_particle(self, p, obj_id, x, v, density, pressure, material, is_dynamic, color):
@@ -191,10 +201,6 @@ class ParticleSystem:
                       new_particles_is_dynamic: ti.types.ndarray(),
                       new_particles_color: ti.types.ndarray()
                       ):
-        # if object_id in self.object_collection:
-        #     self.object_collection[object_id] += new_particles_num
-        # else:
-        #     self.object_collection[object_id] = new_particles_num
         
         self._add_particles(object_id,
                       new_particles_num,
@@ -246,14 +252,6 @@ class ParticleSystem:
     @ti.func
     def get_flatten_grid_index(self, pos):
         return self.flatten_grid_index(self.pos_to_index(pos))
-
-    @ti.func
-    def is_valid_cell(self, cell):
-        # Check whether the cell is in the grid
-        flag = True
-        for d in ti.static(range(self.dim)):
-            flag = flag and (0 <= cell[d] < self.grid_num[d])
-        return flag
     
 
     @ti.func
@@ -264,14 +262,6 @@ class ParticleSystem:
     @ti.func
     def is_dynamic_rigid_body(self, p):
         return self.material[p] == self.material_solid and self.is_dynamic[p]
-
-
-    @ti.kernel
-    def allocate_particles_to_grid(self):
-        for p in range(self.particle_num[None]):
-            cell = self.pos_to_index(self.x[p])
-            offset = ti.atomic_add(self.grid_particles_num[cell], 1)
-            self.grid_particles[cell, offset] = p
     
 
     @ti.kernel
@@ -290,12 +280,15 @@ class ParticleSystem:
         # FIXME: make it the actual particle num
         for i in range(self.particle_max_num):
             I = self.particle_max_num - 1 - i
+        # for i in range(self.particle_num[None]):
+            # I = self.particle_num[None] - 1 - i
             base_offset = 0
             if self.grid_ids[I] - 1 >= 0:
                 base_offset = self.grid_particles_num[self.grid_ids[I]-1]
             self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
 
         for I in ti.grouped(self.grid_ids):
+        # for I in range(self.particle_num[None]):
             new_index = self.grid_ids_new[I]
             self.grid_ids_buffer[new_index] = self.grid_ids[I]
             self.object_id_buffer[new_index] = self.object_id[I]
@@ -312,6 +305,7 @@ class ParticleSystem:
             self.is_dynamic_buffer[new_index] = self.is_dynamic[I]
         
         for I in ti.grouped(self.x):
+        # for I in range(self.particle_num[None]):
             self.grid_ids[I] = self.grid_ids_buffer[I]
             self.object_id[I] = self.object_id_buffer[I]
             self.x_0[I] = self.x_0_buffer[I]
@@ -330,6 +324,7 @@ class ParticleSystem:
     def initialize_particle_system(self):
         self.update_grid_id()
         parallel_prefex_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
+        # parallel_prefex_sum_inclusive_inplace(self.grid_particles_num, self.particle_num[None])
         self.counting_sort()
     
 
@@ -342,59 +337,6 @@ class ParticleSystem:
                 if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
                     task(p_i, p_j, ret)
 
-    # @ti.kernel
-    # def search_neighbors(self):
-    #     # for p_i in range(self.particle_num[None]):
-    #     for p_i in ti.grouped(self.x):
-    #         center_cell = self.pos_to_index(self.x[p_i])
-    #         cnt_fluid = 0
-    #         cnt_boundary = 0
-    #         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
-    #             if cnt_fluid + cnt_boundary >= self.particle_max_num_neighbor:
-    #                 break
-    #             cell = center_cell + offset
-    #             grid_index = self.flatten_grid_index(cell)
-    #             for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-    #                 distance = (self.x[p_i] - self.x[p_j]).norm()
-    #                 if p_i[0] != p_j and distance < self.support_radius:
-    #                     if self.material[p_j] == self.material_fluid:
-    #                         self.fluid_neighbors[p_i, cnt_fluid] = p_j
-    #                         cnt_fluid += 1
-    #                     elif self.material[p_j] == self.material_solid:
-    #                         self.solid_neighbors[p_i, cnt_boundary] = p_j
-    #                         cnt_boundary += 1
-    #         self.fluid_neighbors_num[p_i] = cnt_fluid
-    #         self.solid_neighbors_num[p_i] = cnt_boundary
-
-    # @ti.kernel
-    # def search_neighbors(self):
-    #     for p_i in range(self.particle_num[None]):
-    #         center_cell = self.pos_to_index(self.x[p_i])
-    #         cnt_fluid = 0
-    #         cnt_boundary = 0
-    #         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
-    #             if cnt_fluid + cnt_boundary >= self.particle_max_num_neighbor:
-    #                 break
-    #             cell = center_cell + offset
-    #             for j in range(self.grid_particles_num[cell]):
-    #                 p_j = self.grid_particles[cell, j]
-    #                 distance = (self.x[p_i] - self.x[p_j]).norm()
-    #                 if p_i != p_j and distance < self.support_radius:
-    #                     if self.material[p_j] == self.material_fluid:
-    #                         self.fluid_neighbors[p_i, cnt_fluid] = p_j
-    #                         cnt_fluid += 1
-    #                     elif self.material[p_j] == self.material_solid:
-    #                         self.solid_neighbors[p_i, cnt_boundary] = p_j
-    #                         cnt_boundary += 1
-    #         self.fluid_neighbors_num[p_i] = cnt_fluid
-    #         self.solid_neighbors_num[p_i] = cnt_boundary
-
-    # def initialize_particle_system(self):
-    #     self.grid_particles_num.fill(0)
-    #     self.fluid_neighbors.fill(-1)
-    #     self.solid_neighbors.fill(-1)
-    #     self.allocate_particles_to_grid()
-    #     self.search_neighbors()
 
     @ti.kernel
     def copy_to_numpy_nd(self, obj_id: int, np_arr: ti.types.ndarray(), src_arr: ti.template()):
@@ -416,9 +358,9 @@ class ParticleSystem:
     @ti.kernel
     def _copy_to_vis_buffer(self, obj_id: int):
         assert self.GGUI
-        # for i in range(self.particle_num[None]):
         # FIXME: make it equal to actual particle num
         for i in range(self.particle_max_num):
+        # for i in range(self.particle_num[None]):
             if self.object_id[i] == obj_id:
                 self.x_vis_buffer[i] = self.x[i]
                 self.color_vis_buffer[i] = self.color[i] / 255.0
@@ -465,7 +407,7 @@ class ParticleSystem:
     #     }
 
     def dump(self, obj_id):
-        particle_num = self.object_collection[obj_id]
+        particle_num = self.object_collection[obj_id]["particleNum"]
         np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
         self.copy_to_numpy_nd(obj_id, np_x, self.x)
 
@@ -482,12 +424,29 @@ class ParticleSystem:
         mesh = tm.load(rigid_body["geometryFile"])
         mesh.apply_scale(rigid_body["scale"])
         offset = np.array(rigid_body["translation"])
-        is_success = tm.repair.fill_holes(mesh)
-        print("Is the mesh successfully repaired? ", is_success)
+
+        angle = rigid_body["rotationAngle"] / 360 * 2 * 3.1415926
+        direction = rigid_body["rotationAxis"]
+        rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+        mesh.apply_transform(rot_matrix)
+        
+        is_dynamic = rigid_body["isDynamic"]
+        if is_dynamic:
+            # Backup the original mesh for exporting obj
+            mesh_backup = mesh.copy()
+            mesh_backup.vertices += offset
+            rigid_body["mesh"] = mesh_backup
+            rigid_body["restPosition"] = mesh_backup.vertices
+            rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
+            is_success = tm.repair.fill_holes(mesh)
+        # print("Is the mesh successfully repaired? ", is_success)
+        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
         # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
         # voxelized_mesh.show()
         voxelized_points_np = voxelized_mesh.points + offset
+        print("rigid num ", voxelized_points_np.shape[0])
+        
         return voxelized_points_np
         # num_particles_obj = voxelized_points_np.shape[0]
         # voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)

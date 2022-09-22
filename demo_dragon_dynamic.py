@@ -36,8 +36,8 @@ if __name__ == "__main__":
 
     dim = 3
     substeps = 1
-    output_frames = False
-    output_ply = False
+    output_frames = True
+    output_ply = True
     solver_type = "WCSPH"
     # solver_type = "IISPH"
     ps = ParticleSystem(domain_size, GGUI=True)

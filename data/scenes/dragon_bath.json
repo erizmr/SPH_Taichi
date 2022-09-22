@@ -7,7 +7,8 @@
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000, 
 		"simulationMethod": 0,
-		"gravitation": [0,-9.81,0], 
+		"gravitation": [0,-9.81,0],
+		"timeStepSize": 0.0004,
 		"stiffness": 50000,
 		"exponent": 7,
 		"boundaryHandlingMethod": 0

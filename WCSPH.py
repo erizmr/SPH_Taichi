@@ -6,11 +6,14 @@ class WCSPHSolver(SPHBase):
     def __init__(self, particle_system):
         super().__init__(particle_system)
         # Pressure state function parameters(WCSPH)
-        self.exponent = 7.0
+        self.exponent = 7.0 # Default value
+        self.exponent = self.ps.cfg.get_cfg("exponent")
+
         self.stiffness = 50000.0
+        self.stiffness = self.ps.cfg.get_cfg("stiffness")
+        
         self.surface_tension = 0.01
-        # self.dt[None] = 3e-4
-        self.dt[None] = 3e-4
+        self.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
     
 
     @ti.func
@@ -190,8 +193,9 @@ class WCSPHSolver(SPHBase):
                 continue
             ############## Body force ###############
             # Add body force
-            d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            d_v[1] = self.g
+            # d_v = ti.Vector([0.0 for _ in range(self.ps.dim)])
+            # d_v[1] = self.g
+            d_v = ti.Vector(self.g)
             self.ps.acceleration[p_i] = d_v
             if self.ps.material[p_i] == self.ps.material_fluid:
                 self.ps.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)

@@ -1,3 +1,4 @@
+from matplotlib.pyplot import axis
 import taichi as ti
 import numpy as np
 
@@ -6,11 +7,18 @@ import numpy as np
 class SPHBase:
     def __init__(self, particle_system):
         self.ps = particle_system
-        self.g = -9.80  # Gravity
+        self.g = ti.Vector([0.0, -9.81, 0.0])  # Gravity
+        if self.ps.dim == 2:
+            self.g = ti.Vector([0.0, -9.81])
+        self.g = self.ps.cfg.get_cfg("gravitation")
+
         self.viscosity = 0.01  # viscosity
+
         self.density_0 = 1000.0  # reference density
+        self.density_0 = self.ps.cfg.get_cfg("density0")
+
         self.dt = ti.field(float, shape=())
-        self.dt[None] = 2e-4
+        self.dt[None] = 1e-4
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -71,7 +79,7 @@ class SPHBase:
 
     def initialize_solver(self):
         self.ps.initialize_particle_system()
-        # self.compute_rigid_rest_cm()
+        self.compute_rigid_rest_cm()
         self.compute_static_boundary_volume()
         # self.compute_moving_boundary_volume()
 
@@ -83,35 +91,25 @@ class SPHBase:
     def compute_static_boundary_volume(self):
         # for p_i in range(self.ps.particle_num[None]):
         for p_i in ti.grouped(self.ps.x):
-            if self.ps.material[p_i] != self.ps.material_solid:
+            if not self.ps.is_static_rigid_body(p_i):
                 continue
-            x_i = self.ps.x[p_i]
             delta = self.cubic_kernel(0.0)
-            # for j in range(self.ps.solid_neighbors_num[p_i]):
-            #     p_j = self.ps.solid_neighbors[p_i, j]
-            #     x_j = self.ps.x[p_j]
-            #     delta += self.cubic_kernel((x_i - x_j).norm())
-            self.ps.for_all_neighbors(p_i, self.compute_static_boundary_volume_task, delta)
+            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     @ti.func
-    def compute_static_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
+    def compute_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
         delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
 
 
     @ti.kernel
     def compute_moving_boundary_volume(self):
-        for p_i in range(self.ps.particle_num[None]):
+        for p_i in ti.grouped(self.ps.x):
             if not self.ps.is_dynamic_rigid_body(p_i):
                 continue
-            x_i = self.ps.x[p_i]
             delta = self.cubic_kernel(0.0)
-            for j in range(self.ps.solid_neighbors_num[p_i]):
-                p_j = self.ps.solid_neighbors[p_i, j]
-                x_j = self.ps.x[p_j]
-                delta += self.cubic_kernel((x_i - x_j).norm())
+            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
-            # print(self.ps.m_V0, " ", self.ps.m_V[p_i])
 
     def substep(self):
         pass
@@ -199,7 +197,7 @@ class SPHBase:
 
 
     @ti.kernel
-    def solve_constraints(self):
+    def solve_constraints(self) -> ti.types.matrix(3, 3, float):
         # compute center of mass
         cm = self.compute_cos()
         # A
@@ -221,10 +219,12 @@ class SPHBase:
                 goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[None])
                 corr = (goal - self.ps.x[p_i]) * 1.0
                 self.ps.x[p_i] += corr
+        return R
         
 
     @ti.kernel
     def compute_rigid_collision(self):
+        # FIXME: This is a workaround, rigid collision failure in some cases is expected
         for p_i in range(self.ps.particle_num[None]):
             if not self.ps.is_dynamic_rigid_body(p_i):
                 continue
@@ -250,17 +250,24 @@ class SPHBase:
 
 
     def solve_rigid_body(self):
-        for i in range(5):
-            self.solve_constraints()
-            self.compute_rigid_collision()
+        for i in range(1):
+            R = self.solve_constraints()
+
+            # Update the mesh
+            mesh_vertices = self.ps.object_collection[1]["mesh"].vertices
+            cm = mesh_vertices.mean(axis=0)
+            ret = R.to_numpy() @ (self.ps.object_collection[1]["restPosition"] - self.ps.object_collection[1]["restCenterOfMass"]).T
+            self.ps.object_collection[1]["mesh"].vertices = cm + ret.T
+
+            # self.compute_rigid_collision()
             self.enforce_boundary_3D(self.ps.material_solid)
 
 
     def step(self):
         self.ps.initialize_particle_system()
-        # self.compute_moving_boundary_volume()
+        self.compute_moving_boundary_volume()
         self.substep()
-        # self.solve_rigid_body()
+        self.solve_rigid_body()
         if self.ps.dim == 2:
             self.enforce_boundary_2D(self.ps.material_fluid)
         elif self.ps.dim == 3:
