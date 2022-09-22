@@ -45,6 +45,7 @@ class ParticleSystem:
 
         # All objects id and its particle num
         self.object_collection = dict()
+        self.object_id_rigid_body = set()
 
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
@@ -89,7 +90,7 @@ class ParticleSystem:
         self.object_id = ti.field(dtype=int, shape=self.particle_max_num)
         self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.x_0 = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=())
+        self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=len(rigid_blocks)+len(rigid_bodies))
 
         self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.acceleration = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
@@ -152,6 +153,7 @@ class ParticleSystem:
         # Rigid bodies
         for rigid_body in rigid_bodies:
             obj_id = rigid_body["objectId"]
+            self.object_id_rigid_body.add(obj_id)
             num_particles_obj = rigid_body["particleNum"]
             voxelized_points_np = rigid_body["voxelizedPoints"]
             is_dynamic = rigid_body["isDynamic"]
@@ -161,12 +163,12 @@ class ParticleSystem:
             self.add_particles(obj_id,
                                num_particles_obj,
                                voxelized_points_np, # position
-                               velocity * np.ones((num_particles_obj, 3)), # velocity
+                               np.stack([velocity for _ in range(num_particles_obj)]), # velocity
                                density * np.ones(num_particles_obj), # density
                                np.zeros(num_particles_obj), # pressure
                                np.array([0 for _ in range(num_particles_obj)], dtype=int), # material is solid
                                is_dynamic * np.ones(num_particles_obj), # is_dynamic
-                               color * np.ones((num_particles_obj, 3))) # color
+                               np.stack([color for _ in range(num_particles_obj)])) # color
     
 
     def build_solver(self):

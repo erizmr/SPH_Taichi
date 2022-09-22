@@ -79,13 +79,14 @@ class SPHBase:
 
     def initialize_solver(self):
         self.ps.initialize_particle_system()
-        self.compute_rigid_rest_cm()
+        for r_obj_id in self.ps.object_id_rigid_body:
+            self.compute_rigid_rest_cm(r_obj_id)
         self.compute_static_boundary_volume()
         # self.compute_moving_boundary_volume()
 
     @ti.kernel
-    def compute_rigid_rest_cm(self):
-        self.ps.rigid_rest_cm[None] = self.compute_cos()
+    def compute_rigid_rest_cm(self, object_id: int):
+        self.ps.rigid_rest_cm[object_id] = self.compute_cos(object_id)
 
     @ti.kernel
     def compute_static_boundary_volume(self):
@@ -182,11 +183,11 @@ class SPHBase:
 
     # TODO: Reduce optimization
     @ti.func
-    def compute_cos(self):
+    def compute_cos(self, object_id):
         sum_m = 0.0
         cm = ti.Vector([0.0, 0.0, 0.0])
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.is_dynamic_rigid_body(p_i):
+            if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
                 # mass = self.ps.m_V[p_i]
                 mass = self.ps.m_V0 * self.ps.density[p_i]
                 cm += mass * self.ps.x[p_i]
@@ -197,14 +198,14 @@ class SPHBase:
 
 
     @ti.kernel
-    def solve_constraints(self) -> ti.types.matrix(3, 3, float):
+    def solve_constraints(self, object_id: int) -> ti.types.matrix(3, 3, float):
         # compute center of mass
-        cm = self.compute_cos()
+        cm = self.compute_cos(object_id)
         # A
         A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.is_dynamic_rigid_body(p_i):
-                q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[None]
+            if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
+                q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id]
                 p = self.ps.x[p_i] - cm
                 # A += self.ps.m_V[p_i] * p @ q.transpose()
                 A += self.ps.m_V0 * self.ps.density[p_i] * p @ q.transpose()
@@ -215,8 +216,8 @@ class SPHBase:
             R = ti.Matrix.identity(ti.f32, 3)
         
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.is_dynamic_rigid_body(p_i):
-                goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[None])
+            if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
+                goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id])
                 corr = (goal - self.ps.x[p_i]) * 1.0
                 self.ps.x[p_i] += corr
         return R
@@ -251,16 +252,17 @@ class SPHBase:
 
     def solve_rigid_body(self):
         for i in range(1):
-            R = self.solve_constraints()
+            for r_obj_id in self.ps.object_id_rigid_body:
+                R = self.solve_constraints(r_obj_id)
 
-            # Update the mesh
-            mesh_vertices = self.ps.object_collection[1]["mesh"].vertices
-            cm = mesh_vertices.mean(axis=0)
-            ret = R.to_numpy() @ (self.ps.object_collection[1]["restPosition"] - self.ps.object_collection[1]["restCenterOfMass"]).T
-            self.ps.object_collection[1]["mesh"].vertices = cm + ret.T
+                # Update the mesh
+                mesh_vertices = self.ps.object_collection[r_obj_id]["mesh"].vertices
+                cm = mesh_vertices.mean(axis=0)
+                ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
+                self.ps.object_collection[r_obj_id]["mesh"].vertices = cm + ret.T
 
-            # self.compute_rigid_collision()
-            self.enforce_boundary_3D(self.ps.material_solid)
+                # self.compute_rigid_collision()
+                self.enforce_boundary_3D(self.ps.material_solid)
 
 
     def step(self):
