@@ -1,4 +1,4 @@
-# Taichi SPH
+# SPH Taichi
 
 A high-performance implementation of Smooth Particle Hydrodynamics (SPH) simulator in [Taichi](https://github.com/taichi-dev/taichi). (working in progress)
 
