@@ -4,13 +4,13 @@ A high-performance implementation of Smooth Particle Hydrodynamics (SPH) simulat
 
 ## Examples
 
-- Dragon Bath (~420 K particles, 280 FPS on RTX 3090 GPU, with timestep 4e-4)
+- Dragon Bath (~420 K particles, ~280 FPS on RTX 3090 GPU, with timestep 4e-4)
 
 <p align="center">
   <img src="https://github.com/erizmr/SPH_Taichi/blob/master/data/gif/dragon_bath_large.gif" width="50%" height="50%" />
 </p>
 
-- Armadillo Bath (~1.74 M particles, 80 FPS on RTX 3090 GPU, with timestep 4e-4)
+- Armadillo Bath (~1.74 M particles, ~80 FPS on RTX 3090 GPU, with timestep 4e-4)
 
 <p align="center">
   <img src="https://github.com/erizmr/SPH_Taichi/blob/master/data/gif/armadillo_bath.gif" width="50%" height="50%" />
