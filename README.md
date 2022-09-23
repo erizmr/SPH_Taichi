@@ -1,5 +1,6 @@
 # Taichi SPH
-A [Taichi](https://github.com/taichi-dev/taichi) implementation of Smooth Particle Hydrodynamics (SPH) simulator (working in progress). 
+
+A high-performance implementation of Smooth Particle Hydrodynamics (SPH) simulator in [Taichi](https://github.com/taichi-dev/taichi). (working in progress)
 
 ## Examples
 
@@ -22,6 +23,7 @@ Currently, the following features have been implemented:
 - Support massively parallel GPU computing
 - Weakly Compressible SPH (WCSPH)[1]
 - One-way/two-way fluid-solid coupling[2]
+- Shape-matching based rigid-body simulator
 - Neighborhood search accelerated by GPU parallel prefix sum + counting sort
 
 ### Note
