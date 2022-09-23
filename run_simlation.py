@@ -1,3 +1,5 @@
+import os
+import argparse
 import taichi as ti
 import numpy as np
 from config_builder import SimConfig
@@ -7,13 +9,24 @@ ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
 
 if __name__ == "__main__":
-    scene_path = "./data/scenes/armadillo_bath_dynamic.json"
+    parser = argparse.ArgumentParser(description='SPH Taichi')
+    parser.add_argument('--scene_file',
+                        default='',
+                        help='scene file')
+    args = parser.parse_args()
+    scene_path = args.scene_file
     config = SimConfig(scene_file_path=scene_path)
     scene_name = scene_path.split("/")[-1].split(".")[0]
 
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
-    output_frames = False
-    output_ply = False
+    output_frames = config.get_cfg("exportFrame")
+    output_ply = config.get_cfg("exportObj")
+    series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
+    if output_frames:
+        os.makedirs(f"{scene_name}_output_img", exist_ok=True)
+    if output_ply:
+        os.makedirs(f"{scene_name}_output", exist_ok=True)
+
 
     ps = ParticleSystem(config, GGUI=True)
     solver = ps.build_solver()
@@ -55,7 +68,6 @@ if __name__ == "__main__":
 
     cnt = 0
     cnt_ply = 0
-    series_prefix = "{}_output/object_{}_demo_test.ply".format(scene_name, "{}")
 
     while window.running:
         for i in range(substeps):
@@ -93,6 +105,6 @@ if __name__ == "__main__":
                 cnt_ply += 1
 
         cnt += 1
-        if cnt > 6000:
-            break
+        # if cnt > 6000:
+        #     break
         window.show()

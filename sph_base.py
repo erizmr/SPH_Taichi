@@ -10,7 +10,7 @@ class SPHBase:
         self.g = ti.Vector([0.0, -9.81, 0.0])  # Gravity
         if self.ps.dim == 2:
             self.g = ti.Vector([0.0, -9.81])
-        self.g = self.ps.cfg.get_cfg("gravitation")
+        self.g = np.array(self.ps.cfg.get_cfg("gravitation"))
 
         self.viscosity = 0.01  # viscosity
 
@@ -248,10 +248,11 @@ class SPHBase:
             for r_obj_id in self.ps.object_id_rigid_body:
                 R = self.solve_constraints(r_obj_id)
 
-                # For output obj only: update the mesh
-                cm = self.compute_com_kernel(r_obj_id)
-                ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
-                self.ps.object_collection[r_obj_id]["mesh"].vertices = cm.to_numpy() + ret.T
+                if self.ps.cfg.get_cfg("exportObj"):
+                    # For output obj only: update the mesh
+                    cm = self.compute_com_kernel(r_obj_id)
+                    ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
+                    self.ps.object_collection[r_obj_id]["mesh"].vertices = cm.to_numpy() + ret.T
 
                 # self.compute_rigid_collision()
                 self.enforce_boundary_3D(self.ps.material_solid)
