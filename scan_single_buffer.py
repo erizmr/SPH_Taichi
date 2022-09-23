@@ -1,10 +1,4 @@
-from turtle import shape
 import taichi as ti
-import math
-import time
-import random
-
-# from torch import rand
 
 
 @ti.func
@@ -35,6 +29,7 @@ def warp_inclusive_add_cuda(val: ti.template()):
     return val
 
 
+# target = ti.cfg.cuda
 target = ti.cuda
 if target == ti.cuda:
     inclusive_add = warp_inclusive_add_cuda
@@ -92,43 +87,8 @@ def uniform_add(arr_in: ti.template(), in_beg: ti.i32, in_end: ti.i32):
         arr_in[i] += arr_in[in_end + block_id - 1]
 
 
-# # Ground truth for comparison
-# def scan_golden(arr_in: ti.template()):
-#     cur_sum = 0
-#     for i in range(n_elements):
-#         cur_sum += arr_in[i]
-#         arr_in[i] = cur_sum
-
-
-# ti.init(arch=target)
-
 WARP_SZ = 32
 BLOCK_SZ = 128
-# # n_elements = BLOCK_SZ * 300
-# n_elements = 128 * 16000
-# print("Scan", n_elements, "element")
-# GRID_SZ = int((n_elements + BLOCK_SZ - 1) / BLOCK_SZ)
-
-# # Declare input array and all partial sums
-# ele_num = n_elements
-
-# # Get starting position and length
-# ele_nums = [ele_num]
-# start_pos = 0
-# ele_nums_pos = [start_pos]
-
-# while (ele_num > 1):
-#     ele_num = int((ele_num + BLOCK_SZ - 1) / BLOCK_SZ)
-#     ele_nums.append(ele_num)
-#     start_pos += BLOCK_SZ * ele_num
-#     ele_nums_pos.append(start_pos)
-
-# # Single buffer, start_pos holds the sum of all buffer sizes
-# arr = ti.field(ti.i32, shape=start_pos)
-# arr_golden = ti.field(ti.i32, shape=n_elements)
-
-# # This should be replaced real smem, size is block_size/32+1
-# smem = ti.field(ti.i32, shape=(int(GRID_SZ), 64))
 
 @ti.kernel
 def blit_from_field_to_field(
@@ -145,7 +105,7 @@ ele_nums_pos = [0]
 large_arr = None
 
 
-def parallel_prefex_sum_inclusive_inplace(input_arr, length):
+def parallel_prefix_sum_inclusive_inplace(input_arr, length):
 
     global smem
     global arrs
@@ -184,34 +144,3 @@ def parallel_prefex_sum_inclusive_inplace(input_arr, length):
         uniform_add(large_arr, ele_nums_pos[i], ele_nums_pos[i + 1])
     
     blit_from_field_to_field(input_arr, large_arr, 0, length)
-
-
-
-# def initialize():
-#     for i in range(n_elements):
-#         arr[i] = arr_golden[i] = int(random.random() * 10)
-
-
-# # dry run
-# initialize()
-
-# for i in range(len(ele_nums) - 1):
-#     if i == len(ele_nums) - 2:
-#         shfl_scan(arr, ele_nums_pos[i], ele_nums_pos[i + 1], smem, True)
-#     else:
-#         shfl_scan(arr, ele_nums_pos[i], ele_nums_pos[i + 1], smem, False)
-
-# for i in range(len(ele_nums) - 3, -1, -1):
-#     uniform_add(arr, ele_nums_pos[i], ele_nums_pos[i + 1])
-# ti.sync()
-
-# # compute ground truth
-# scan_golden(arr_golden)
-
-# # Compare
-# for i in range(n_elements):
-#     if arr_golden[i] != arr[i]:
-#         print(f"Failed at pos {i} arr_golden {arr_golden[i]} vs arr {arr[i]}")
-#         break
-
-# print("Done")

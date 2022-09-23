@@ -4,7 +4,7 @@ import trimesh as tm
 from functools import reduce
 from config_builder import SimConfig
 from WCSPH import WCSPHSolver
-from scan_single_buffer import parallel_prefex_sum_inclusive_inplace
+from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
 class ParticleSystem:
@@ -157,17 +157,17 @@ class ParticleSystem:
             num_particles_obj = rigid_body["particleNum"]
             voxelized_points_np = rigid_body["voxelizedPoints"]
             is_dynamic = rigid_body["isDynamic"]
-            velocity = np.array(rigid_body["velocity"])
+            velocity = np.array(rigid_body["velocity"], dtype=np.float32)
             density = rigid_body["density"]
-            color = np.array(rigid_body["color"])
+            color = np.array(rigid_body["color"], dtype=np.int32)
             self.add_particles(obj_id,
                                num_particles_obj,
-                               voxelized_points_np, # position
+                               np.array(voxelized_points_np, dtype=np.float32), # position
                                np.stack([velocity for _ in range(num_particles_obj)]), # velocity
-                               density * np.ones(num_particles_obj), # density
-                               np.zeros(num_particles_obj), # pressure
-                               np.array([0 for _ in range(num_particles_obj)], dtype=int), # material is solid
-                               is_dynamic * np.ones(num_particles_obj), # is_dynamic
+                               density * np.ones(num_particles_obj, dtype=np.float32), # density
+                               np.zeros(num_particles_obj, dtype=np.float32), # pressure
+                               np.array([0 for _ in range(num_particles_obj)], dtype=np.int32), # material is solid
+                               is_dynamic * np.ones(num_particles_obj, dtype=np.int32), # is_dynamic
                                np.stack([color for _ in range(num_particles_obj)])) # color
     
 
@@ -282,15 +282,12 @@ class ParticleSystem:
         # FIXME: make it the actual particle num
         for i in range(self.particle_max_num):
             I = self.particle_max_num - 1 - i
-        # for i in range(self.particle_num[None]):
-            # I = self.particle_num[None] - 1 - i
             base_offset = 0
             if self.grid_ids[I] - 1 >= 0:
                 base_offset = self.grid_particles_num[self.grid_ids[I]-1]
             self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
 
         for I in ti.grouped(self.grid_ids):
-        # for I in range(self.particle_num[None]):
             new_index = self.grid_ids_new[I]
             self.grid_ids_buffer[new_index] = self.grid_ids[I]
             self.object_id_buffer[new_index] = self.object_id[I]
@@ -307,7 +304,6 @@ class ParticleSystem:
             self.is_dynamic_buffer[new_index] = self.is_dynamic[I]
         
         for I in ti.grouped(self.x):
-        # for I in range(self.particle_num[None]):
             self.grid_ids[I] = self.grid_ids_buffer[I]
             self.object_id[I] = self.object_id_buffer[I]
             self.x_0[I] = self.x_0_buffer[I]
@@ -325,8 +321,8 @@ class ParticleSystem:
 
     def initialize_particle_system(self):
         self.update_grid_id()
-        parallel_prefex_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
-        # parallel_prefex_sum_inclusive_inplace(self.grid_particles_num, self.particle_num[None])
+        # FIXME: change to taichi built-in prefix_sum_inclusive_inplace after next Taichi release i.e., 1.1.4
+        parallel_prefix_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
         self.counting_sort()
     
 
@@ -362,7 +358,6 @@ class ParticleSystem:
         assert self.GGUI
         # FIXME: make it equal to actual particle num
         for i in range(self.particle_max_num):
-        # for i in range(self.particle_num[None]):
             if self.object_id[i] == obj_id:
                 self.x_vis_buffer[i] = self.x[i]
                 self.color_vis_buffer[i] = self.color[i] / 255.0
@@ -423,6 +418,7 @@ class ParticleSystem:
     
 
     def load_rigid_body(self, rigid_body):
+        obj_id = rigid_body["objectId"]
         mesh = tm.load(rigid_body["geometryFile"])
         mesh.apply_scale(rigid_body["scale"])
         offset = np.array(rigid_body["translation"])
@@ -441,18 +437,15 @@ class ParticleSystem:
             rigid_body["restPosition"] = mesh_backup.vertices
             rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
             is_success = tm.repair.fill_holes(mesh)
-        # print("Is the mesh successfully repaired? ", is_success)
+            # print("Is the mesh successfully repaired? ", is_success)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
         # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
         # voxelized_mesh.show()
         voxelized_points_np = voxelized_mesh.points + offset
-        print("rigid num ", voxelized_points_np.shape[0])
+        print(f"rigid body {obj_id} num: {voxelized_points_np.shape[0]}")
         
         return voxelized_points_np
-        # num_particles_obj = voxelized_points_np.shape[0]
-        # voxelized_points = ti.Vector.field(3, ti.f32, num_particles_obj)
-        # voxelized_points.from_numpy(voxelized_points_np)
 
 
     def compute_cube_particle_num(self, start, end):
@@ -482,9 +475,6 @@ class ParticleSystem:
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         print('particle num ', num_new_particles)
-        # print('current particle num ', self.particle_num[None] + num_new_particles)
-        # assert self.particle_num[
-        #            None] + num_new_particles <= self.particle_max_num
 
         new_positions = np.array(np.meshgrid(*num_dim,
                                              sparse=False,
@@ -494,13 +484,13 @@ class ParticleSystem:
                                               reduce(lambda x, y: x * y, list(new_positions.shape[1:]))).transpose()
         print("new position shape ", new_positions.shape)
         if velocity is None:
-            velocity_arr = np.full_like(new_positions, 0)
+            velocity_arr = np.full_like(new_positions, 0, dtype=np.float32)
         else:
             velocity_arr = np.array([velocity for _ in range(num_new_particles)], dtype=np.float32)
 
-        material_arr = np.full_like(np.zeros(num_new_particles), material)
-        is_dynamic_arr = np.full_like(np.zeros(num_new_particles), is_dynamic)
-        color_arr = np.stack([np.full_like(np.zeros(num_new_particles), c) for c in color], axis=1)
-        density_arr = np.full_like(np.zeros(num_new_particles), density if density is not None else 1000.)
-        pressure_arr = np.full_like(np.zeros(num_new_particles), pressure if pressure is not None else 0.)
+        material_arr = np.full_like(np.zeros(num_new_particles, dtype=np.int32), material)
+        is_dynamic_arr = np.full_like(np.zeros(num_new_particles, dtype=np.int32), is_dynamic)
+        color_arr = np.stack([np.full_like(np.zeros(num_new_particles, dtype=np.int32), c) for c in color], axis=1)
+        density_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), density if density is not None else 1000.)
+        pressure_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), pressure if pressure is not None else 0.)
         self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
