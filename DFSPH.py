@@ -122,13 +122,15 @@ class DFSPHSolver(SPHBase):
     @ti.kernel
     def compute_DFSPH_factor(self):
         for p_i in ti.grouped(self.ps.x):
+            if self.ps.material[p_i] != self.ps.material_fluid:
+                continue
             sum_grad_p_k = 0.0
             grad_p_i = ti.Vector([0.0 for _ in range(self.ps.dim)])
             
             # `ret` concatenates `grad_p_i` and `sum_grad_p_k`
             ret = ti.Vector([0.0 for _ in range(self.ps.dim + 1)])
             
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, ret)
+            self.ps.for_all_neighbors(p_i, self.compute_DFSPH_factor_task, ret)
             
             sum_grad_p_k = ret[3]
             for i in ti.static(range(3)):
@@ -146,7 +148,7 @@ class DFSPHSolver(SPHBase):
 
     @ti.func
     def compute_DFSPH_factor_task(self, p_i, p_j, ret: ti.template()):
-        grad_p_j = -self.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
+        grad_p_j = -self.ps.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
         if self.ps.material[p_j] == self.ps.material_fluid:
             # Fluid neighbors
             ret[3] += grad_p_j.norm_sqr() # sum_grad_p_k
