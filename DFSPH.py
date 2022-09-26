@@ -24,7 +24,7 @@ class DFSPHSolver(SPHBase):
         self.m_eps = 1e-5
 
         self.max_error_V = 0.1
-        self.max_error = 0.1
+        self.max_error = 0.05
     
 
     @ti.func
@@ -53,48 +53,6 @@ class DFSPHSolver(SPHBase):
             self.ps.density[p_i] += den
             self.ps.density[p_i] *= self.density_0
     
-
-    @ti.func
-    def compute_pressure_forces_task(self, p_i, p_j, ret: ti.template()):
-        x_i = self.ps.x[p_i]
-        dpi = self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
-        # Fluid neighbors
-        if self.ps.material[p_j] == self.ps.material_fluid:
-            x_j = self.ps.x[p_j]
-            density_j = self.ps.density[p_j] * self.density_0 / self.density_0  # TODO: The density_0 of the neighbor may be different when the fluid density is different
-            dpj = self.ps.pressure[p_j] / (density_j * density_j)
-            # Compute the pressure force contribution, Symmetric Formula
-            ret += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                * self.cubic_kernel_derivative(x_i-x_j)
-        elif self.ps.material[p_j] == self.ps.material_solid:
-            # Boundary neighbors
-            dpj = self.ps.pressure[p_i] / self.density_0 ** 2
-            ## Akinci2012
-            x_j = self.ps.x[p_j]
-            # Compute the pressure force contribution, Symmetric Formula
-            f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                * self.cubic_kernel_derivative(x_i-x_j)
-            ret += f_p
-            if self.ps.is_dynamic_rigid_body(p_j):
-                self.ps.acceleration[p_j] += -f_p * self.density_0 / self.ps.density[p_j]
-    
-    @ti.kernel
-    def compute_pressure_forces(self):
-        for p_i in ti.grouped(self.ps.x):
-            if self.ps.material[p_i] != self.ps.material_fluid:
-                continue
-            self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
-            self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
-        for p_i in ti.grouped(self.ps.x):
-            if self.ps.is_static_rigid_body(p_i):
-                self.ps.acceleration[p_i].fill(0)
-                continue
-            elif self.ps.is_dynamic_rigid_body(p_i):
-                continue
-            dv = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            self.ps.for_all_neighbors(p_i, self.compute_pressure_forces_task, dv)
-            self.ps.acceleration[p_i] += dv
-
 
     @ti.func
     def compute_non_pressure_forces_task(self, p_i, p_j, ret: ti.template()):
@@ -156,8 +114,10 @@ class DFSPHSolver(SPHBase):
         # Update position
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:
+                if self.ps.is_dynamic_rigid_body(p_i):
+                    self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
-
+    
 
     @ti.kernel
     def compute_DFSPH_factor(self):
@@ -178,7 +138,7 @@ class DFSPHSolver(SPHBase):
             # Compute pressure stiffness denominator
             factor = 0.0
             if sum_grad_p_k > 1e-6:
-                factor = 1.0 / sum_grad_p_k
+                factor = -1.0 / sum_grad_p_k
             else:
                 factor = 0.0
             self.ps.dfsph_factor[p_i] = factor
@@ -218,7 +178,7 @@ class DFSPHSolver(SPHBase):
             else:
                 if num_neighbors < 7:
                     density_adv = 0.0
-            
+     
             self.ps.density_adv[p_i] = density_adv
     
 
@@ -295,17 +255,18 @@ class DFSPHSolver(SPHBase):
             # Max allowed density fluctuation
             # use max density error divided by time step size
             eta = 1.0 / self.dt[None] * self.max_error_V * 0.01 * self.density_0
-            
+            # print("eta ", eta)
             if avg_density_err <= eta:
                 break
             m_iterations_v += 1
-        print(f"DFSPH - iteration V: {m_iterations_v}")
+        print(f"DFSPH - iteration V: {m_iterations_v} Avg density err: {avg_density_err}")
         # Multiply by h, the time step size has to be removed 
         # to make the stiffness value independent 
         # of the time step size
 
         # TODO: if warm start
         # also remove for kappa v
+
         self.multiply_time_step(self.ps.dfsph_factor, self.dt[None])
 
 
@@ -373,11 +334,10 @@ class DFSPHSolver(SPHBase):
             avg_density_err = self.pressure_solve_iteration()
             # Max allowed density fluctuation
             eta = self.max_error * 0.01 * self.density_0
-            
             if avg_density_err <= eta:
                 break
             m_iterations += 1
-        print(f"DFSPH - iterations: {m_iterations}")
+        print(f"DFSPH - iterations: {m_iterations} Avg density Err: {avg_density_err:.4f}")
         # Multiply by h, the time step size has to be removed 
         # to make the stiffness value independent 
         # of the time step size
