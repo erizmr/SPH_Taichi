@@ -318,7 +318,7 @@ class ParticleSystem:
             self.color_buffer[new_index] = self.color[I]
             self.is_dynamic_buffer[new_index] = self.is_dynamic[I]
 
-            if self.simulation_method == 4:
+            if ti.static(self.simulation_method == 4):
                 self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
                 self.density_adv_buffer[new_index] = self.density_adv[I]
         
@@ -337,7 +337,7 @@ class ParticleSystem:
             self.color[I] = self.color_buffer[I]
             self.is_dynamic[I] = self.is_dynamic_buffer[I]
 
-            if self.simulation_method == 4:
+            if ti.static(self.simulation_method == 4):
                 self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
                 self.density_adv[I] = self.density_adv_buffer[I]
     

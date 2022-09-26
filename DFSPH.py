@@ -6,12 +6,6 @@ from sph_base import SPHBase
 class DFSPHSolver(SPHBase):
     def __init__(self, particle_system):
         super().__init__(particle_system)
-        # Pressure state function parameters(WCSPH)
-        self.exponent = 7.0
-        self.exponent = self.ps.cfg.get_cfg("exponent")
-
-        self.stiffness = 50000.0
-        self.stiffness = self.ps.cfg.get_cfg("stiffness")
         
         self.surface_tension = 0.01
         self.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
@@ -91,7 +85,7 @@ class DFSPHSolver(SPHBase):
                 r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
             ret += f_v
             if self.ps.is_dynamic_rigid_body(p_j):
-                self.ps.acceleration[p_j] += -f_v * self.density_0 / self.ps.density[p_j]
+                self.ps.acceleration[p_j] += -f_v * self.ps.density[p_i] / self.ps.density[p_j]
 
 
     @ti.kernel
@@ -148,15 +142,16 @@ class DFSPHSolver(SPHBase):
 
     @ti.func
     def compute_DFSPH_factor_task(self, p_i, p_j, ret: ti.template()):
-        grad_p_j = -self.ps.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
         if self.ps.material[p_j] == self.ps.material_fluid:
             # Fluid neighbors
+            grad_p_j = -self.ps.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
             ret[3] += grad_p_j.norm_sqr() # sum_grad_p_k
             for i in ti.static(range(3)): # grad_p_i
                 ret[i] -= grad_p_j[i]
         elif self.ps.material[p_j] == self.ps.material_solid:
             # Boundary neighbors
             ## Akinci2012
+            grad_p_j = -self.ps.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
             for i in ti.static(range(3)): # grad_p_i
                 ret[i] -= grad_p_j[i]
     
@@ -182,7 +177,7 @@ class DFSPHSolver(SPHBase):
                     density_adv = 0.0
      
             self.ps.density_adv[p_i] = density_adv
-    
+
 
     @ti.func
     def compute_density_change_task(self, p_i, p_j, ret: ti.template()):
@@ -262,6 +257,7 @@ class DFSPHSolver(SPHBase):
                 break
             m_iterations_v += 1
         print(f"DFSPH - iteration V: {m_iterations_v} Avg density err: {avg_density_err}")
+
         # Multiply by h, the time step size has to be removed 
         # to make the stiffness value independent 
         # of the time step size
@@ -292,6 +288,7 @@ class DFSPHSolver(SPHBase):
             # TODO: if warm start
             # get_kappa_V += k_i
             self.ps.for_all_neighbors(p_i, self.divergence_solver_iteration_task, ret)
+            self.ps.v[p_i] += ret.dv
         
     
     @ti.func
@@ -302,7 +299,7 @@ class DFSPHSolver(SPHBase):
             k_j = b_j * self.ps.dfsph_factor[p_j]
             k_sum = ret.k_i + self.density_0 / self.density_0 * k_j  # TODO: make the neighbor density0 different for multiphase fluid
             if ti.abs(k_sum) > self.m_eps:
-                grad_p_j = - self.ps.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
+                grad_p_j = -self.ps.m_V[p_j] * self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j])
                 ret.dv -= self.dt[None] * k_sum * grad_p_j
         elif self.ps.material[p_j] == self.ps.material_solid:
             # Boundary neighbors
@@ -390,13 +387,14 @@ class DFSPHSolver(SPHBase):
                 vel_change = - self.dt[None] * 1.0 * k_i * grad_p_j  # kj already contains inverse density
                 self.ps.v[p_i] += vel_change
                 if self.ps.is_dynamic_rigid_body(p_j):
-                    self.ps.acceleration[p_j] += -self.ps.density[p_i] / self.ps.density[p_j] * vel_change * 1.0 / self.dt[None]
+                    self.ps.acceleration[p_j] += -vel_change * 1.0 / self.dt[None] * self.ps.density[p_i] / self.ps.density[p_j] 
+
 
     @ti.kernel
     def predict_velocity(self):
         # compute new velocities only considering non-pressure forces
         for p_i in ti.grouped(self.ps.x):
-            if self.ps.is_dynamic[p_i]:
+            if self.ps.is_dynamic[p_i] and self.ps.material[p_i] == self.ps.material_fluid:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
 
 

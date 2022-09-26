@@ -20,6 +20,7 @@ if __name__ == "__main__":
 
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
     output_frames = config.get_cfg("exportFrame")
+    output_interval = int(0.016 / config.get_cfg("timeStepSize"))
     output_ply = config.get_cfg("exportObj")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
@@ -87,10 +88,10 @@ if __name__ == "__main__":
             canvas.scene(scene)
     
         if output_frames:
-            if cnt % 20 == 0:
+            if cnt % output_interval == 0:
                 window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
         if output_ply:
-            if cnt % 20 == 0:
+            if cnt % output_interval == 0:
                 obj_id = 0
                 obj_data = ps.dump(obj_id=obj_id)
                 np_pos = obj_data["position"]
