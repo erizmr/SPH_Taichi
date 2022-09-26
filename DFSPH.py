@@ -149,14 +149,13 @@ class DFSPHSolver(SPHBase):
             if self.ps.material[p_i] == self.ps.material_fluid:
                 self.ps.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
                 self.ps.acceleration[p_i] = d_v
-
+    
 
     @ti.kernel
     def advect(self):
-        # Symplectic Euler
+        # Update position
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:
-                self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
 
 
@@ -229,14 +228,38 @@ class DFSPHSolver(SPHBase):
         v_j = self.ps.v[p_j]
         if self.ps.material[p_j] == self.ps.material_fluid:
             # Fluid neighbors
-            ret.density_adv += self.ps.V[p_j] * (v_i - v_j).dot(self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j]))
+            ret.density_adv += self.ps.m_V[p_j] * (v_i - v_j).dot(self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j]))
         elif self.ps.material[p_j] == self.ps.material_solid:
             # Boundary neighbors
             ## Akinci2012
-            ret.density_adv += self.ps.V[p_j] * (v_i - v_j).dot(self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j]))
+            ret.density_adv += self.ps.m_V[p_j] * (v_i - v_j).dot(self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j]))
         
         # Compute the number of neighbors
         ret.num_neighbors += 1
+    
+
+    @ti.kernel
+    def compute_density_adv(self):
+        for p_i in ti.grouped(self.ps.x):
+            if self.ps.material[p_i] != self.ps.material_fluid:
+                continue
+            delta = 0.0
+            self.ps.for_all_neighbors(p_i, self.compute_density_adv_task, delta)
+            density_adv = self.ps.density[p_i] /self.density_0 + self.dt[None] * delta
+            self.ps.density_adv[p_i] = ti.max(density_adv, 1.0)
+
+
+    @ti.func
+    def compute_density_adv_task(self, p_i, p_j, ret: ti.template()):
+        v_i = self.ps.v[p_i]
+        v_j = self.ps.v[p_j]
+        if self.ps.material[p_j] == self.ps.material_fluid:
+            # Fluid neighbors
+            ret += self.ps.m_V[p_j] * (v_i - v_j).dot(self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j]))
+        elif self.ps.material[p_j] == self.ps.material_solid:
+            # Boundary neighbors
+            ## Akinci2012
+            ret += self.ps.m_V[p_j] * (v_i - v_j).dot(self.cubic_kernel_derivative(self.ps.x[p_i] - self.ps.x[p_j]))
 
 
     @ti.kernel
@@ -336,8 +359,8 @@ class DFSPHSolver(SPHBase):
         # TODO: warm start
         
         # Compute rho_adv
-        self.computeDensityAdv
-        # self.compute_density_change()
+        self.compute_density_adv()
+
         self.multiply_time_step(self.ps.dfsph_factor, inv_dt2)
 
         m_iterations = 0
@@ -365,10 +388,8 @@ class DFSPHSolver(SPHBase):
     def pressure_solve_iteration(self):
         density_err = 0.0
         self.pressure_solve_iteration_kernel()
-        # self.compute_density_change()
-        # TODO: 
-        self.computeDensityAdv()
-        self.compute_density_error_pressure_solver(density_err, self.density_0)
+        self.compute_density_adv()
+        self.compute_density_error(density_err, self.density_0)
         return density_err / self.fluid_particle_num
 
     
