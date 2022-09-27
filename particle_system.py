@@ -164,6 +164,25 @@ class ParticleSystem:
                           material=1) # 1 indicates fluid
         
         # TODO: Handle rigid block
+        # Rigid block
+        for rigid in rigid_blocks:
+            obj_id = rigid["objectId"]
+            offset = np.array(rigid["translation"])
+            start = np.array(rigid["start"]) + offset
+            end = np.array(rigid["end"]) + offset
+            scale = np.array(rigid["scale"])
+            velocity = rigid["velocity"]
+            density = rigid["density"]
+            color = rigid["color"]
+            is_dynamic = rigid["isDynamic"]
+            self.add_cube(object_id=obj_id,
+                          lower_corner=start,
+                          cube_size=(end-start)*scale,
+                          velocity=velocity,
+                          density=density, 
+                          is_dynamic=is_dynamic,
+                          color=color,
+                          material=0) # 1 indicates solid
 
         # Rigid bodies
         for rigid_body in rigid_bodies:
@@ -377,6 +396,7 @@ class ParticleSystem:
             np_arr[i] = src_arr[i]
     
     def copy_to_vis_buffer(self, invisible_objects=[]):
+        self.x_vis_buffer.fill(0.0)
         for obj_id in self.object_collection:
             if obj_id not in invisible_objects:
                 self._copy_to_vis_buffer(obj_id)

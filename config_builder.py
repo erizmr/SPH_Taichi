@@ -11,6 +11,11 @@ class SimConfig:
     def get_cfg(self, name, enforce_exist=False):
         if enforce_exist:
             assert name in self.config["Configuration"]
+        if name not in self.config["Configuration"]:
+            if enforce_exist:
+                assert name in self.config["Configuration"]
+            else:
+                return None
         return self.config["Configuration"][name]
     
     def get_rigid_bodies(self):

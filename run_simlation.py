@@ -49,6 +49,11 @@ if __name__ == "__main__":
     background_color = (0, 0, 0)  # 0xFFFFFF
     particle_color = (1, 1, 1)
 
+    # Invisible objects
+    invisible_objects = config.get_cfg("invisibleObjects")
+    if not invisible_objects:
+        invisible_objects = []
+
     # Draw the lines for domain
     x_max, y_max, z_max = config.get_cfg("domainEnd")
     box_anchors = ti.Vector.field(3, dtype=ti.f32, shape = 8)
@@ -73,7 +78,7 @@ if __name__ == "__main__":
     while window.running:
         for i in range(substeps):
             solver.step()
-        ps.copy_to_vis_buffer()
+        ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:
             canvas.set_background_color(background_color)
             canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
