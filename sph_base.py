@@ -99,7 +99,8 @@ class SPHBase:
 
     @ti.func
     def compute_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
-        delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
+        if self.ps.material[p_j] == self.ps.material_solid:
+            delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
 
 
     @ti.kernel

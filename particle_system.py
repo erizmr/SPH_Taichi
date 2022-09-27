@@ -4,6 +4,7 @@ import trimesh as tm
 from functools import reduce
 from config_builder import SimConfig
 from WCSPH import WCSPHSolver
+from DFSPH import DFSPHSolver
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
@@ -22,7 +23,8 @@ class ParticleSystem:
 
         self.dim = len(self.domain_size)
         assert self.dim > 1
-
+        # Simulation method
+        self.simulation_method = self.cfg.get_cfg("simulationMethod")
 
         # Material
         self.material_solid = 0
@@ -75,6 +77,8 @@ class ParticleSystem:
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
         
+        self.fluid_particle_num = fluid_particle_num
+        self.solid_particle_num = rigid_particle_num
         self.particle_max_num = fluid_particle_num + rigid_particle_num
 
         #### TODO: Handle the Particle Emitter ####
@@ -82,6 +86,9 @@ class ParticleSystem:
         print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
 
         #========== Allocate memory ==========#
+        # Rigid body properties
+        self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=len(rigid_blocks)+len(rigid_bodies))
+
         # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
         self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))   
@@ -90,8 +97,6 @@ class ParticleSystem:
         self.object_id = ti.field(dtype=int, shape=self.particle_max_num)
         self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.x_0 = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=len(rigid_blocks)+len(rigid_bodies))
-
         self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.acceleration = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.m_V = ti.field(dtype=float, shape=self.particle_max_num)
@@ -101,6 +106,10 @@ class ParticleSystem:
         self.material = ti.field(dtype=int, shape=self.particle_max_num)
         self.color = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic = ti.field(dtype=int, shape=self.particle_max_num)
+
+        if self.cfg.get_cfg("simulationMethod") == 4:
+            self.dfsph_factor = ti.field(dtype=float, shape=self.particle_max_num)
+            self.density_adv = ti.field(dtype=float, shape=self.particle_max_num)
 
         # Buffer for sort
         self.object_id_buffer = ti.field(dtype=int, shape=self.particle_max_num)
@@ -115,6 +124,10 @@ class ParticleSystem:
         self.material_buffer = ti.field(dtype=int, shape=self.particle_max_num)
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic_buffer = ti.field(dtype=int, shape=self.particle_max_num)
+
+        if self.cfg.get_cfg("simulationMethod") == 4:
+            self.dfsph_factor_buffer = ti.field(dtype=float, shape=self.particle_max_num)
+            self.density_adv_buffer = ti.field(dtype=float, shape=self.particle_max_num)
 
         # Grid id for each particle
         self.grid_ids = ti.field(int, shape=self.particle_max_num)
@@ -175,6 +188,8 @@ class ParticleSystem:
         solver_type = self.cfg.get_cfg("simulationMethod")
         if solver_type == 0:
             return WCSPHSolver(self)
+        elif solver_type == 4:
+            return DFSPHSolver(self)
         else:
             raise NotImplementedError(f"Solver type {solver_type} has not been implemented.")
 
@@ -302,6 +317,10 @@ class ParticleSystem:
             self.material_buffer[new_index] = self.material[I]
             self.color_buffer[new_index] = self.color[I]
             self.is_dynamic_buffer[new_index] = self.is_dynamic[I]
+
+            if ti.static(self.simulation_method == 4):
+                self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
+                self.density_adv_buffer[new_index] = self.density_adv[I]
         
         for I in ti.grouped(self.x):
             self.grid_ids[I] = self.grid_ids_buffer[I]
@@ -317,6 +336,10 @@ class ParticleSystem:
             self.material[I] = self.material_buffer[I]
             self.color[I] = self.color_buffer[I]
             self.is_dynamic[I] = self.is_dynamic_buffer[I]
+
+            if ti.static(self.simulation_method == 4):
+                self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
+                self.density_adv[I] = self.density_adv_buffer[I]
     
 
     def initialize_particle_system(self):
