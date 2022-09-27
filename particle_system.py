@@ -396,7 +396,9 @@ class ParticleSystem:
             np_arr[i] = src_arr[i]
     
     def copy_to_vis_buffer(self, invisible_objects=[]):
-        self.x_vis_buffer.fill(0.0)
+        if len(invisible_objects) != 0:
+            self.x_vis_buffer.fill(0.0)
+            self.color_vis_buffer.fill(0.0)
         for obj_id in self.object_collection:
             if obj_id not in invisible_objects:
                 self._copy_to_vis_buffer(obj_id)
