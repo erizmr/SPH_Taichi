@@ -80,6 +80,7 @@ class ParticleSystem:
         self.fluid_particle_num = fluid_particle_num
         self.solid_particle_num = rigid_particle_num
         self.particle_max_num = fluid_particle_num + rigid_particle_num
+        self.num_rigid_bodies = len(rigid_blocks)+len(rigid_bodies)
 
         #### TODO: Handle the Particle Emitter ####
         # self.particle_max_num += emitted particles
@@ -87,7 +88,8 @@ class ParticleSystem:
 
         #========== Allocate memory ==========#
         # Rigid body properties
-        self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=len(rigid_blocks)+len(rigid_bodies))
+        if self.num_rigid_bodies > 0:
+            self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_rigid_bodies)
 
         # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
@@ -170,7 +172,10 @@ class ParticleSystem:
             num_particles_obj = rigid_body["particleNum"]
             voxelized_points_np = rigid_body["voxelizedPoints"]
             is_dynamic = rigid_body["isDynamic"]
-            velocity = np.array(rigid_body["velocity"], dtype=np.float32)
+            if is_dynamic:
+                velocity = np.array(rigid_body["velocity"], dtype=np.float32)
+            else:
+                velocity = np.array([0.0 for _ in range(self.dim)], dtype=np.float32)
             density = rigid_body["density"]
             color = np.array(rigid_body["color"], dtype=np.int32)
             self.add_particles(obj_id,
@@ -463,8 +468,8 @@ class ParticleSystem:
             # print("Is the mesh successfully repaired? ", is_success)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
-        # voxelized_mesh = mesh.voxelized(pitch=ps.particle_diameter).hollow()
-        # voxelized_mesh.show()
+        # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
+        # mesh.show()
         voxelized_points_np = voxelized_mesh.points + offset
         print(f"rigid body {obj_id} num: {voxelized_points_np.shape[0]}")
         
