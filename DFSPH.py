@@ -1,4 +1,3 @@
-from symbol import factor
 import taichi as ti
 from sph_base import SPHBase
 

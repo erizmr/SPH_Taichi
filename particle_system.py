@@ -368,8 +368,8 @@ class ParticleSystem:
 
     def initialize_particle_system(self):
         self.update_grid_id()
-        # FIXME: change to taichi built-in prefix_sum_inclusive_inplace after next Taichi release i.e., 1.1.4
-        parallel_prefix_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
+        prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
+        prefix_sum_executor.run(self.grid_particles_num)
         self.counting_sort()
     
 
