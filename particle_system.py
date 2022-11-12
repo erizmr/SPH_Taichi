@@ -93,7 +93,9 @@ class ParticleSystem:
 
         # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
-        self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))   
+        self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
+
+        self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
         # Particle related properties
         self.object_id = ti.field(dtype=int, shape=self.particle_max_num)
@@ -368,8 +370,7 @@ class ParticleSystem:
 
     def initialize_particle_system(self):
         self.update_grid_id()
-        # FIXME: change to taichi built-in prefix_sum_inclusive_inplace after next Taichi release i.e., 1.1.4
-        parallel_prefix_sum_inclusive_inplace(self.grid_particles_num, self.grid_particles_num.shape[0])
+        self.prefix_sum_executor.run(self.grid_particles_num)
         self.counting_sort()
     
 
