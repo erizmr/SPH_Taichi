@@ -1,2 +1,2 @@
-taichi
+taichi>=1.2.0
 trimesh
