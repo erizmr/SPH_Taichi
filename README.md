@@ -38,11 +38,11 @@ python -m pip install -r requirements.txt
 To reproduce the demos show above:
 
 ```
-python run_simlation.py --scene_file ./data/scenes/dragon_bath.json
+python run_simulation.py --scene_file ./data/scenes/dragon_bath.json
 ```
 
 ```
-python run_simlation.py --scene_file ./data/scenes/armadillo_bath_dynamic.json
+python run_simulation.py --scene_file ./data/scenes/armadillo_bath_dynamic.json
 ```
 
 
