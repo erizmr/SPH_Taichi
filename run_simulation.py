@@ -78,9 +78,11 @@ if __name__ == "__main__":
     pause = ti.field(int,())
 
     while window.running:
-        if window.is_pressed(ti.ui.SPACE):
-            pause[None] = not pause[None]
 
+        if window.get_event(ti.ui.PRESS):
+            if window.event.key in [ti.ui.SPACE]:
+                pause[None] = not pause[None]
+        
         if(pause[None] == False):
             for i in range(substeps):
                 solver.step()
