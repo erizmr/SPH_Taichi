@@ -75,9 +75,16 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
+    pause = ti.field(int,())
+
     while window.running:
-        for i in range(substeps):
-            solver.step()
+        if window.is_pressed(ti.ui.SPACE):
+            pause[None] = not pause[None]
+
+        if(pause[None] == False):
+            for i in range(substeps):
+                solver.step()
+        
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:
             canvas.set_background_color(background_color)
