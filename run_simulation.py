@@ -4,6 +4,7 @@ import taichi as ti
 import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
+from io.read_ply import read_ply
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
@@ -28,6 +29,9 @@ if __name__ == "__main__":
     if output_ply:
         os.makedirs(f"{scene_name}_output", exist_ok=True)
 
+    if config.get_cfg("readPly"):
+        ply_path = config.get_cfg("plyPath")
+        pts = read_ply(ply_path,1,1000)
 
     ps = ParticleSystem(config, GGUI=True)
     solver = ps.build_solver()
