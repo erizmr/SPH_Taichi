@@ -48,6 +48,7 @@ class ParticleSystem:
         # All objects id and its particle num
         self.object_collection = dict()
         self.object_id_rigid_body = set()
+        self.object_id_fluid_body = set()
 
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
@@ -58,6 +59,15 @@ class ParticleSystem:
             fluid["particleNum"] = particle_num
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
+
+        #### Process Fluid Bodies ####
+        fluid_bodies = self.cfg.get_fluid_bodies()
+        for fluid_body in fluid_bodies:
+            voxelized_points_np_fluid = self.load_fluid_body(fluid_body)
+            fluid_body["particleNum"] = voxelized_points_np_fluid.shape[0]
+            fluid_body["voxelizedPoints"] = voxelized_points_np_fluid
+            self.object_collection[fluid_body["objectId"]] = fluid_body
+            fluid_particle_num += voxelized_points_np_fluid.shape[0]
 
         #### Process Rigid Blocks ####
         rigid_blocks = self.cfg.get_rigid_blocks()
@@ -76,11 +86,14 @@ class ParticleSystem:
             rigid_body["voxelizedPoints"] = voxelized_points_np
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
-        
+
+
+
         self.fluid_particle_num = fluid_particle_num
         self.solid_particle_num = rigid_particle_num
         self.particle_max_num = fluid_particle_num + rigid_particle_num
         self.num_rigid_bodies = len(rigid_blocks)+len(rigid_bodies)
+        self.num_fluid_bodies = len(fluid_blocks) + len(fluid_bodies)
 
         #### TODO: Handle the Particle Emitter ####
         # self.particle_max_num += emitted particles
@@ -90,6 +103,9 @@ class ParticleSystem:
         # Rigid body properties
         if self.num_rigid_bodies > 0:
             self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_rigid_bodies)
+        # Rigid body properties
+        if self.num_fluid_bodies > 0:
+            self.fluid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_fluid_bodies)
 
         # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
@@ -208,7 +224,30 @@ class ParticleSystem:
                                np.array([0 for _ in range(num_particles_obj)], dtype=np.int32), # material is solid
                                is_dynamic * np.ones(num_particles_obj, dtype=np.int32), # is_dynamic
                                np.stack([color for _ in range(num_particles_obj)])) # color
-    
+
+        # Fluid bodies
+        for fluid_body in fluid_bodies:
+            obj_id = fluid_body["objectId"]
+            self.object_id_fluid_body.add(obj_id)
+            num_particles_obj = fluid_body["particleNum"]
+            voxelized_points_np = fluid_body["voxelizedPoints"]
+            is_dynamic = 1
+            if is_dynamic:
+                velocity = np.array(fluid_body["velocity"], dtype=np.float32)
+            else:
+                velocity = np.array([0.0 for _ in range(self.dim)], dtype=np.float32)
+            density = fluid_body["density"]
+            color = np.array(fluid_body["color"], dtype=np.int32)
+            self.add_particles(obj_id,
+                               num_particles_obj,
+                               np.array(voxelized_points_np, dtype=np.float32),  # position
+                               np.stack([velocity for _ in range(num_particles_obj)]),  # velocity
+                               density * np.ones(num_particles_obj, dtype=np.float32),  # density
+                               np.zeros(num_particles_obj, dtype=np.float32),  # pressure
+                               np.array([1 for _ in range(num_particles_obj)], dtype=np.int32),  # material is fluid
+                               is_dynamic * np.ones(num_particles_obj, dtype=np.int32),  # is_dynamic
+                               np.stack([color for _ in range(num_particles_obj)]))  # color
+
 
     def build_solver(self):
         solver_type = self.cfg.get_cfg("simulationMethod")
@@ -498,6 +537,35 @@ class ParticleSystem:
         
         return voxelized_points_np
 
+    def load_fluid_body(self, fluid_body):
+        obj_id = fluid_body["objectId"]
+        mesh = tm.load(fluid_body["geometryFile"])
+        mesh.apply_scale(fluid_body["scale"])
+        offset = np.array(fluid_body["translation"])
+
+        angle = fluid_body["rotationAngle"] / 360 * 2 * 3.1415926
+        direction = fluid_body["rotationAxis"]
+        rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+        mesh.apply_transform(rot_matrix)
+
+        is_dynamic = 1
+        if is_dynamic:
+            # Backup the original mesh for exporting obj
+            mesh_backup = mesh.copy()
+            mesh_backup.vertices += offset
+            fluid_body["mesh"] = mesh_backup
+            fluid_body["restPosition"] = mesh_backup.vertices
+            fluid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
+            is_success = tm.repair.fill_holes(mesh)
+            # print("Is the mesh successfully repaired? ", is_success)
+        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
+        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
+        # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
+        # mesh.show()
+        voxelized_points_np = voxelized_mesh.points + offset
+        print(f"fluid body {obj_id} num: {voxelized_points_np.shape[0]}")
+
+        return voxelized_points_np
 
     def compute_cube_particle_num(self, start, end):
         num_dim = []

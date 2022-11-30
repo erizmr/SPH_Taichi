@@ -35,3 +35,8 @@ class SimConfig:
             return self.config["FluidBlocks"]
         else:
             return []
+    def get_fluid_bodies(self):
+        if "FluidBodies" in self.config:
+            return self.config["FluidBodies"]
+        else:
+            return []
