@@ -95,7 +95,9 @@ class DFSPHSolver(SPHBase):
                 continue
             ############## Body force ###############
             # Add body force
-            d_v = ti.Vector(self.g)
+
+            d_v = ti.Vector(self.g)-self.ps.x[p_i]
+            # print(ti.Vector(self.g))
             self.ps.acceleration[p_i] = d_v
             if self.ps.material[p_i] == self.ps.material_fluid:
                 self.ps.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
