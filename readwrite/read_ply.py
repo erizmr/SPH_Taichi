@@ -6,10 +6,10 @@ import numpy as np
 给定文件序列的起始和结束编号。
 返回的是一个python list，list的每一项都是一个numpy数组。
 '''
-def read_ply(ply_path, start=1, stop=1000):
+def read_ply(ply_path_no_ext, start=1, stop=1000):
     pts=[]
     for i in range(start, stop):
-        ply_path = ply_path + f"{i:}.ply"
+        ply_path = ply_path_no_ext + f".{i:}.ply"
         print("Reading ", ply_path)
         mesh = trimesh.load(ply_path)
         v = mesh.vertices

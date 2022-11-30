@@ -257,7 +257,7 @@ class DFSPHSolver(SPHBase):
             if avg_density_err <= eta:
                 break
             m_iterations_v += 1
-        print(f"DFSPH - iteration V: {m_iterations_v} Avg density err: {avg_density_err}")
+        # print(f"DFSPH - iteration V: {m_iterations_v} Avg density err: {avg_density_err}")
 
         # Multiply by h, the time step size has to be removed 
         # to make the stiffness value independent 
@@ -337,7 +337,7 @@ class DFSPHSolver(SPHBase):
             if avg_density_err <= eta:
                 break
             m_iterations += 1
-        print(f"DFSPH - iterations: {m_iterations} Avg density Err: {avg_density_err:.4f}")
+        # print(f"DFSPH - iterations: {m_iterations} Avg density Err: {avg_density_err:.4f}")
         # Multiply by h, the time step size has to be removed 
         # to make the stiffness value independent 
         # of the time step size
