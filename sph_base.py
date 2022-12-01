@@ -272,8 +272,9 @@ class SPHBase:
                 self.ps.g_id[i] = self.ps.get_flatten_grid_index(self.ps.pts[i])
                 if self.ps.grid_ids[p_i] == grid_index:
                     # apply force
-                    strength = (self.ps.pts[i] - ti.Vector(self.center_pos)).norm()
+                    strength = (self.ps.pts[i] - ti.Vector(self.center_pos)).norm() - 0.5 #球半径的大小为0.5
                     self.dance_impulse[p_i] = strength * 1.0
+                    self.ps.v[p_i] += self.dance_impulse[p_i]
                     # print("dance_impulse[p_i]:",self.dance_impulse[p_i])
 
     def step(self, cnt):
