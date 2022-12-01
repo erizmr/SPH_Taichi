@@ -1,5 +1,6 @@
 import taichi as ti
 from sph_base import SPHBase
+import numpy as np
 
 
 class DFSPHSolver(SPHBase):
@@ -96,7 +97,8 @@ class DFSPHSolver(SPHBase):
             ############## Body force ###############
             # Add body force
 
-            d_v = ti.Vector(self.g)-self.ps.x[p_i]
+            d_v = ti.Vector(self.center_pos)-self.ps.x[p_i]
+            # self.g_id[p_i] = self.ps.get_flatten_grid_index(self.ps.x[p_i])
             # print(ti.Vector(self.g))
             self.ps.acceleration[p_i] = d_v
             if self.ps.material[p_i] == self.ps.material_fluid:
@@ -106,6 +108,8 @@ class DFSPHSolver(SPHBase):
 
     @ti.kernel
     def advect(self):
+        print("in advect self.ps.cnt",self.ps.cnt[None])
+        print(self.ps.pts[self.ps.cnt[None]])
         # Update position
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:

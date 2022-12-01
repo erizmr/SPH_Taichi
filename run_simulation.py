@@ -76,9 +76,6 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
-    if config.get_cfg("readPly"):
-        ply_path = config.get_cfg("plyPath")
-        plys = read_ply(ply_path, 1, 1000)
 
     pause = ti.field(int,())
 
@@ -90,9 +87,10 @@ if __name__ == "__main__":
         if(pause[None] == False):
             print("current frame: ", cnt)
             for i in range(substeps):
-                solver.step()
+                ps.update_pts(cnt)
+                solver.step(cnt)
                 if(cnt+1<999):
-                    print("plys shape:",plys[cnt+1].shape)
+                    print("plys shape:",ps.plys[cnt+1].shape)
         
             ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
             if ps.dim == 2:

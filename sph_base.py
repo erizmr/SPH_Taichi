@@ -20,6 +20,10 @@ class SPHBase:
         self.dt = ti.field(float, shape=())
         self.dt[None] = 1e-4
 
+        # MYADD
+        self.center_pos = np.array(self.ps.cfg.get_cfg("centerPos"))
+        self.dance_impulse = ti.field(float, shape=self.ps.particle_max_num)
+
     @ti.func
     def cubic_kernel(self, r_norm):
         res = ti.cast(0.0, ti.f32)
@@ -258,10 +262,26 @@ class SPHBase:
                 # self.compute_rigid_collision()
                 self.enforce_boundary_3D(self.ps.material_solid)
 
+    @ti.kernel
+    def compute_dance_impluse(self):
+        # grid_index是当前粒子所在方块
+        # g_id是节奏所在方格
+        for p_i in ti.grouped(self.ps.x):
+            grid_index = self.ps.get_flatten_grid_index(self.ps.x[p_i])
+            for i in range(self.ps.pts.shape[0]):
+                self.ps.g_id[i] = self.ps.get_flatten_grid_index(self.ps.pts[i])
+                if self.ps.grid_ids[p_i] == grid_index:
+                    # apply force
+                    strength = (self.ps.pts[i] - ti.Vector(self.center_pos)).norm()
+                    self.dance_impulse[p_i] = strength * 1.0
+                    # print("dance_impulse[p_i]:",self.dance_impulse[p_i])
 
-    def step(self):
+    def step(self, cnt):
+        self.ps.cnt[None] = cnt
+        # print(self.ps.cnt[None])
         self.ps.initialize_particle_system()
         self.compute_moving_boundary_volume()
+        self.compute_dance_impluse()
         self.substep()
         self.solve_rigid_body()
         if self.ps.dim == 2:

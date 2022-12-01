@@ -5,7 +5,7 @@ pts=[]
 
 def test():
     for i in range(1,1000):
-        PlyPath = f"E:/codes/try/tiReadPly/test_clip/points.{i:}.ply"
+        PlyPath = f"D:\CG\meshSequence\sphere_points\sphere_points.{i:}.ply"
         print("Reading ", PlyPath)
         mesh = trimesh.load(PlyPath)
         v = mesh.vertices

@@ -6,12 +6,20 @@ from config_builder import SimConfig
 from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
-
+from readwrite.read_ply import read_ply
 @ti.data_oriented
 class ParticleSystem:
     def __init__(self, config: SimConfig, GGUI=False):
         self.cfg = config
         self.GGUI = GGUI
+
+        # MYADD
+        self.cnt = ti.field(int, ())
+        if config.get_cfg("readPly") == True :
+            ply_path = config.get_cfg("plyPath")
+            self.plys = read_ply(ply_path, 1, 10)
+        
+        pts0_np = self.plys[0]
 
         self.domain_start = np.array([0.0, 0.0, 0.0])
         self.domain_start = np.array(self.cfg.get_cfg("domainStart"))
@@ -159,6 +167,16 @@ class ParticleSystem:
             self.x_vis_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
             self.color_vis_buffer = ti.Vector.field(3, dtype=float, shape=self.particle_max_num)
 
+        # MYADD
+        
+        num_pts = pts0_np.shape[0]
+        self.g_id = ti.field(dtype=int, shape=self.particle_max_num)
+
+        self.pts0 = ti.Vector.field(3,dtype=float, shape=pts0_np.shape[0])
+        self.pts0.from_numpy(pts0_np)
+
+        self.pts = ti.Vector.field(3,dtype=float, shape=pts0_np.shape[0])
+        self.pts.from_numpy(pts0_np)
 
         #========== Initialize particles ==========#
 
@@ -321,6 +339,24 @@ class ParticleSystem:
                               )
         self.particle_num[None] += new_particles_num
 
+
+    # @ti.kernel
+    # def pts_to_gid(self, pts:ti.types.ndarray()):
+    #     print(pts.shape[0])
+    #     for I in ti.grouped(self.x):
+    #         grid_index = self.get_flatten_grid_index(pts[I])
+    #         self.grid_ids[I] = grid_index
+    
+    # def pts_to_gid(self, pts):
+    #     g_id = np.zeros(shape=(pts.shape[0],3), dtype=float)
+    #     for i in range(pts.shape[0]):
+    #         g_id[i][0] = int(pts[i]/self.grid_size)[0]
+    #         g_id[i][1] = int(pts[i]/self.grid_size)[1]
+    #         g_id[i][2] = int(pts[i]/self.grid_size)[2]
+    #     return g_id
+
+    # def new_pos_to_index(self, pos):
+    #     return ti.cast(pos / self.grid_size,int)
 
     @ti.func
     def pos_to_index(self, pos):
@@ -613,3 +649,7 @@ class ParticleSystem:
         density_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), density if density is not None else 1000.)
         pressure_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), pressure if pressure is not None else 0.)
         self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
+
+    # MYADD
+    def update_pts(self, cnt):
+        self.pts.from_numpy(self.plys[cnt])
