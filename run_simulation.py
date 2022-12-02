@@ -22,7 +22,7 @@ if __name__ == "__main__":
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
     output_frames = config.get_cfg("exportFrame")
     output_interval = int(0.016 / config.get_cfg("timeStepSize"))
-    output_ply = config.get_cfg("exportObj")
+    output_ply = config.get_cfg("exportPly")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
         os.makedirs(f"{scene_name}_output_img", exist_ok=True)
@@ -76,10 +76,12 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
-
+    start_frame = config.get_cfg("startFrame")
+    end_frame = config.get_cfg("endFrame")
     pause = ti.field(int,())
 
     while window.running:
+
         if window.get_event(ti.ui.PRESS):
             if window.event.key in [ti.ui.SPACE]:
                 pause[None] = not pause[None]
@@ -87,10 +89,8 @@ if __name__ == "__main__":
         if(pause[None] == False):
             print("current frame: ", cnt)
             for i in range(substeps):
-                ps.update_pts(cnt)
+                ps.update_pts(ps.plys[cnt])
                 solver.step(cnt)
-                if(cnt+1<999):
-                    print("plys shape:",ps.plys[cnt+1].shape)
         
             ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
             if ps.dim == 2:
@@ -125,6 +125,7 @@ if __name__ == "__main__":
                     cnt_ply += 1
 
             cnt += 1
-            # if cnt > 6000:
-            #     break
+            if end_frame!=None:
+                if cnt > end_frame:
+                    break
             window.show()
