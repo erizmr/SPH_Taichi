@@ -264,18 +264,21 @@ class SPHBase:
 
     @ti.kernel
     def compute_dance_impluse(self):
-        # grid_index是当前粒子所在方块
-        # g_id是节奏所在方格
+    # grid_index是当前粒子所在方块
+    # g_id是节奏所在方格
         for p_i in ti.grouped(self.ps.x):
-            grid_index = self.ps.get_flatten_grid_index(self.ps.x[p_i])
+            # grid_index = self.ps.get_flatten_grid_index(self.ps.x[p_i])
             for i in range(self.ps.pts.shape[0]):
+                print("out-------------")
                 self.ps.g_id[i] = self.ps.get_flatten_grid_index(self.ps.pts[i])
-                if self.ps.grid_ids[p_i] == grid_index:
+                if self.ps.grid_ids[p_i] == self.ps.g_id[i] :
+                    print("in -------------")
                     # apply force
                     strength = (self.ps.pts[i] - ti.Vector(self.center_pos)).norm() - 0.5 #球半径的大小为0.5
                     self.dance_impulse[p_i] = strength * 1.0
                     self.ps.v[p_i] += self.dance_impulse[p_i]
-                    # print("dance_impulse[p_i]:",self.dance_impulse[p_i])
+                    print("dance_impulse[p_i]:",self.dance_impulse[p_i])
+                    # break;
 
     def step(self, cnt):
         self.ps.cnt[None] = cnt
