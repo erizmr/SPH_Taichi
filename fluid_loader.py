@@ -2,6 +2,7 @@ import numpy as np
 import trimesh as tm
 import taichi as ti
 from functools import reduce
+@ti.data_oriented
 class FluidLoader():
     def __init__(self,ps):
         self.ps = ps
@@ -266,7 +267,7 @@ class FluidLoader():
             for d in ti.static(range(self.ps.dim)):
                 v[d] = new_particles_velocity[p - self.ps.particle_num[None], d]
                 x[d] = new_particles_positions[p - self.ps.particle_num[None], d]
-            self.ps.add_particle(p, object_id, x, v,
+            self.add_particle(p, object_id, x, v,
                               new_particle_density[p - self.ps.particle_num[None]],
                               new_particle_pressure[p - self.ps.particle_num[None]],
                               new_particles_material[p - self.ps.particle_num[None]],
@@ -280,7 +281,7 @@ class FluidLoader():
         fluid_particle_num = 0
         for fluid in self.fluid_blocks:
             particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
-            fluid["particleNum"] = particle_num
+            self.fluid["particleNum"] = particle_num
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
         return fluid_particle_num
@@ -301,7 +302,7 @@ class FluidLoader():
         rigid_particle_num = 0
         for rigid in self.rigid_blocks:
             particle_num = self.compute_cube_particle_num(rigid["start"], rigid["end"])
-            rigid["particleNum"] = particle_num
+            self.rigid["particleNum"] = particle_num
             self.object_collection[rigid["objectId"]] = rigid
             rigid_particle_num += particle_num
         return rigid_particle_num
@@ -312,7 +313,7 @@ class FluidLoader():
         for rigid_body in self.rigid_bodies:
             voxelized_points_np = self.load_rigid_body(rigid_body)
             rigid_body["particleNum"] = voxelized_points_np.shape[0]
-            rigid_body["voxelizedPoints"] = voxelized_points_np
+            self.rigid_body["voxelizedPoints"] = voxelized_points_np
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
         return rigid_particle_num

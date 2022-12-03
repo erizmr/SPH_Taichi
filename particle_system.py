@@ -37,13 +37,11 @@ class ParticleSystem:
 
         self.particle_num = ti.field(int, shape=())
 
+
         # 实例化一个loader 计算粒子的最大数目
         from fluid_loader import FluidLoader
         self.loader = FluidLoader(self) 
         self.particle_max_num = self.loader.compute_particle_max_num()
-        #为了便利 为常用变量赋别名
-        self.fluid_particle_num = self.loader.fluid_particle_num 
-        self.object_collection = self.loader.object_collection
 
         #### TODO: Handle the Particle Emitter ####
         # self.particle_max_num += emitted particles
@@ -74,7 +72,12 @@ class ParticleSystem:
         if self.cfg.get_cfg("simulationMethod") == 4:
             self.dfsph_factor = ti.field(dtype=float, shape=self.particle_max_num)
             self.density_adv = ti.field(dtype=float, shape=self.particle_max_num)
-           
+        
+        self.loader.add_blocks_bodies()
+        #为了便利 为常用变量赋别名
+        self.fluid_particle_num = self.loader.fluid_particle_num 
+        self.object_collection = self.loader.object_collection
+
 
         self.x_vis_buffer = None
         if self.GGUI:
