@@ -82,8 +82,8 @@ class SPHBase:
         return res
 
     def initialize(self):
-        self.ps.initialize_particle_system()
-        for r_obj_id in self.ps.object_id_rigid_body:
+        self.ps.ns.initialize_particle_system()
+        for r_obj_id in self.ps.loader.object_id_rigid_body:
             self.compute_rigid_rest_cm(r_obj_id)
         self.compute_static_boundary_volume()
         self.compute_moving_boundary_volume()
@@ -98,7 +98,7 @@ class SPHBase:
             if not self.ps.is_static_rigid_body(p_i):
                 continue
             delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     @ti.func
@@ -113,7 +113,7 @@ class SPHBase:
             if not self.ps.is_dynamic_rigid_body(p_i):
                 continue
             delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     def substep(self):
@@ -250,7 +250,7 @@ class SPHBase:
 
     def solve_rigid_body(self):
         for i in range(1):
-            for r_obj_id in self.ps.object_id_rigid_body:
+            for r_obj_id in self.ps.loader.object_id_rigid_body:
                 R = self.solve_constraints(r_obj_id)
 
                 if self.ps.cfg.get_cfg("exportObj"):
@@ -269,9 +269,9 @@ class SPHBase:
         for p_i in ti.grouped(self.ps.x):
             # grid_index = self.ps.get_flatten_grid_index(self.ps.x[p_i])
             for i in range(self.ps.pts.shape[0]):
-                self.ps.g_id[i] = self.ps.get_flatten_grid_index(self.ps.pts[i]+ti.Vector(self.center_pos))# self.ps.pts[i]以原点为中心
+                self.ps.g_id[i] = self.ps.ns.get_flatten_grid_index(self.ps.pts[i]+ti.Vector(self.center_pos))# self.ps.pts[i]以原点为中心
 
-                if self.ps.grid_ids[p_i] == self.ps.g_id[i] :
+                if self.ps.ns.grid_ids[p_i] == self.ps.g_id[i] :
                     # apply force
                     strength = (self.ps.pts[i] - ti.Vector(self.center_pos)).norm() - 0.5 #球半径的大小为0.5
                     self.dance_impulse[p_i] = strength * 0.4
@@ -282,7 +282,7 @@ class SPHBase:
     def step(self, cnt):
         self.ps.cnt[None] = cnt
         # print(self.ps.cnt[None])
-        self.ps.initialize_particle_system()
+        self.ps.ns.initialize_particle_system()
         self.compute_moving_boundary_volume()
         self.compute_dance_impluse()
         self.substep()

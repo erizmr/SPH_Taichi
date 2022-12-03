@@ -19,6 +19,15 @@ class DFSPHSolver(SPHBase):
 
         self.max_error_V = 0.1
         self.max_error = 0.05
+
+        # for I in ti.grouped(self.grid_ids):
+        #     new_index = self.grid_ids_new[I]
+        #     if ti.static(self.simulation_method == 4):
+        #         self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
+        #         self.density_adv_buffer[new_index] = self.density_adv[I]
+        # for I in ti.grouped(self.ps.x):
+        #     self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
+        #     self.density_adv[I] = self.density_adv_buffer[I]
     
 
     @ti.func
@@ -43,7 +52,7 @@ class DFSPHSolver(SPHBase):
                 continue
             self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
             den = 0.0
-            self.ps.for_all_neighbors(p_i, self.compute_densities_task, den)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_densities_task, den)
             self.ps.density[p_i] += den
             self.ps.density[p_i] *= self.density_0
     
@@ -102,7 +111,7 @@ class DFSPHSolver(SPHBase):
             # print(ti.Vector(self.g))
             self.ps.acceleration[p_i] = d_v
             if self.ps.material[p_i] == self.ps.material_fluid:
-                self.ps.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
+                self.ps.ns.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
                 self.ps.acceleration[p_i] = d_v
     
 
@@ -129,7 +138,7 @@ class DFSPHSolver(SPHBase):
             # `ret` concatenates `grad_p_i` and `sum_grad_p_k`
             ret = ti.Vector([0.0 for _ in range(self.ps.dim + 1)])
             
-            self.ps.for_all_neighbors(p_i, self.compute_DFSPH_factor_task, ret)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_DFSPH_factor_task, ret)
             
             sum_grad_p_k = ret[3]
             for i in ti.static(range(3)):
@@ -167,7 +176,7 @@ class DFSPHSolver(SPHBase):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             ret = ti.Struct(density_adv=0.0, num_neighbors=0)
-            self.ps.for_all_neighbors(p_i, self.compute_density_change_task, ret)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_density_change_task, ret)
 
             # only correct positive divergence
             density_adv = ti.max(ret.density_adv, 0.0)
@@ -206,7 +215,7 @@ class DFSPHSolver(SPHBase):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             delta = 0.0
-            self.ps.for_all_neighbors(p_i, self.compute_density_adv_task, delta)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_density_adv_task, delta)
             density_adv = self.ps.density[p_i] /self.density_0 + self.dt[None] * delta
             self.ps.density_adv[p_i] = ti.max(density_adv, 1.0)
 
@@ -292,7 +301,7 @@ class DFSPHSolver(SPHBase):
             ret = ti.Struct(dv=ti.Vector([0.0 for _ in range(self.ps.dim)]), k_i=k_i)
             # TODO: if warm start
             # get_kappa_V += k_i
-            self.ps.for_all_neighbors(p_i, self.divergence_solver_iteration_task, ret)
+            self.ps.ns.for_all_neighbors(p_i, self.divergence_solver_iteration_task, ret)
             self.ps.v[p_i] += ret.dv
         
     
@@ -368,7 +377,7 @@ class DFSPHSolver(SPHBase):
 
             # TODO: if warmstart
             # get kappa V
-            self.ps.for_all_neighbors(p_i, self.pressure_solve_iteration_task, k_i)
+            self.ps.ns.for_all_neighbors(p_i, self.pressure_solve_iteration_task, k_i)
     
 
     @ti.func

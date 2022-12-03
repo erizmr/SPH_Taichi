@@ -38,7 +38,7 @@ class WCSPHSolver(SPHBase):
                 continue
             self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
             den = 0.0
-            self.ps.for_all_neighbors(p_i, self.compute_densities_task, den)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_densities_task, den)
             self.ps.density[p_i] += den
             self.ps.density[p_i] *= self.density_0
     
@@ -81,7 +81,7 @@ class WCSPHSolver(SPHBase):
             elif self.ps.is_dynamic_rigid_body(p_i):
                 continue
             dv = ti.Vector([0.0 for _ in range(self.ps.dim)])
-            self.ps.for_all_neighbors(p_i, self.compute_pressure_forces_task, dv)
+            self.ps.ns.for_all_neighbors(p_i, self.compute_pressure_forces_task, dv)
             self.ps.acceleration[p_i] += dv
 
 
@@ -136,7 +136,7 @@ class WCSPHSolver(SPHBase):
             d_v = ti.Vector(self.g)
             self.ps.acceleration[p_i] = d_v
             if self.ps.material[p_i] == self.ps.material_fluid:
-                self.ps.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
+                self.ps.ns.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
                 self.ps.acceleration[p_i] = d_v
 
 

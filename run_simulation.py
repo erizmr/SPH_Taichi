@@ -117,7 +117,7 @@ if __name__ == "__main__":
                     writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                     writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
                     
-                    for r_body_id in ps.object_id_rigid_body:
+                    for r_body_id in ps.loader.object_id_rigid_body:
                         with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
                             e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
                             f.write(e)
