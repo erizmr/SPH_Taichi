@@ -89,7 +89,7 @@ if __name__ == "__main__":
         if(pause[None] == False):
             print("current frame: ", cnt)
             for i in range(substeps):
-                ps.update_pts(ps.plys[cnt])
+                ps.update_data(ps.plys[cnt])
                 solver.step(cnt)
         
             ps.copy_to_vis_buffer(invisible_objects=invisible_objects)

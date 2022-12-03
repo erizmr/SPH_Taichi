@@ -7,7 +7,9 @@ from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 from readwrite.read_ply import read_ply
-from readwrite.read_vdb import read_vdb
+
+
+
 @ti.data_oriented
 class ParticleSystem:
     def __init__(self, config: SimConfig, GGUI=False):
@@ -161,28 +163,7 @@ class ParticleSystem:
             self.color_vis_buffer = ti.Vector.field(3, dtype=float, shape=self.particle_max_num)
 
 
-        # MYADD ======================
-        self.cnt = ti.field(int, ()) # 当前帧号
-        self.g_id = ti.field(dtype=int, shape=self.particle_max_num) # 外界点的网格编号
-        self.num_pts = 0 # 外界点的总数
 
-        # 每帧外界读入的数据存入pts, 使用update_pts更新
-        # read ply
-        if config.get_cfg("readPly") == True :
-            ply_path = config.get_cfg("plyPath")
-            self.plys = read_ply(ply_path, 1, 10)
-            
-            num_pts = self.plys[0].shape[0] #外界粒子数目
-
-        # read vdb
-        if config.get_cfg("readVdb") == True :
-            vdb_path = config.get_cfg("vdbPath")
-            vdb_obj_name = config.get_cfg("vdbObjName")
-            self.vdbs = read_vdb(vdb_path, vdb_obj_name, 1, 10)
-            # num_pts = self.vdbs[0].shape[0] #外界粒子数目
-
-        self.pts = ti.Vector.field(3,dtype=float, shape=num_pts)
-        # END of MYADD ======================
 
 
         #========== Initialize particles ==========#
@@ -658,5 +639,32 @@ class ParticleSystem:
         self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
 
     # MYADD
-    def update_pts(self, outside_data):
+    def update_data(self, outside_data):
         self.pts.from_numpy(outside_data)
+
+    def input_data(self):
+        print("123123")
+        # MYADD ======================
+        self.cnt = ti.field(int, ()) # 当前帧号
+        self.g_id = ti.field(dtype=int, shape=self.particle_max_num) # 外界点的网格编号
+        self.num_pts = 1 # 外界点的总数
+
+        # 每帧外界读入的数据存入pts, 使用update_pts更新
+        # read ply
+        if self.cfg.get_cfg("readPly") == True :
+            ply_path = self.cfg.get_cfg("plyPath")
+            self.plys = read_ply(ply_path, 1, 10)
+            
+            self.num_pts = self.plys[0].shape[0] #外界粒子数目
+
+        # read vdb
+        if self.cfg.get_cfg("readVdb") == True :
+            from readwrite.read_vdb import read_vdb
+
+            vdb_path = self.cfg.get_cfg("vdbPath")
+            vdb_obj_name = self.cfg.get_cfg("vdbObjName")
+            self.vdbs = read_vdb(vdb_path, vdb_obj_name, 1, 10)
+            # num_pts = self.vdbs[0].shape[0] #外界粒子数目
+
+        self.pts = ti.Vector.field(3,dtype=float, shape=self.num_pts)
+        # END of MYADD ======================
