@@ -76,8 +76,7 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
-    start_frame = config.get_cfg("startFrame")
-    end_frame = config.get_cfg("endFrame")
+    end_frame = config.get_cfg("simEndFrame")
     pause = ti.field(int,())
 
     while window.running:
@@ -89,7 +88,7 @@ if __name__ == "__main__":
         if(pause[None] == False):
             print("current frame: ", cnt)
             for i in range(substeps):
-                ps.update_data(ps.plys[cnt])
+                # ps.update_data(ps.plys[cnt])
                 solver.step(cnt)
         
             ps.copy_to_vis_buffer(invisible_objects=invisible_objects)

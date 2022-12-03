@@ -16,13 +16,13 @@
 		"exportFrame": false,
 		"exportPly": true,
 		"exportObj": false,
-		"readPly": false,
+		"readPly": true,
 		"plyPath": "E:/codes/try/tiReadPly/test_clip/points",
+		"plyRange":[1,100],
 		"readVdb": false,
 		"vdbPath": "D:/CG/meshSequence/sphere_points_v2_vdb/sphere_points_v2_vdb",
 		"vdbObjName":"v",
-		"startFrame":1,
-		"endFrame":10
+		"simEndFrame":1000
 	},
 	"FluidBodies": [
 		{

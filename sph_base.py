@@ -282,7 +282,6 @@ class SPHBase:
     def step(self, cnt):
         self.ps.cnt[None] = cnt
         # print(self.ps.cnt[None])
-
         self.ps.initialize_particle_system()
         self.compute_moving_boundary_volume()
         self.compute_dance_impluse()

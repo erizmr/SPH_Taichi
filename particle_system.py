@@ -164,7 +164,7 @@ class ParticleSystem:
 
 
 
-
+        self.input_data()
 
         #========== Initialize particles ==========#
 
@@ -653,7 +653,8 @@ class ParticleSystem:
         # read ply
         if self.cfg.get_cfg("readPly") == True :
             ply_path = self.cfg.get_cfg("plyPath")
-            self.plys = read_ply(ply_path, 1, 10)
+            ply_range = self.cfg.get_cfg("plyRange")
+            self.plys = read_ply(ply_path, ply_range[0], ply_range[1])
             
             self.num_pts = self.plys[0].shape[0] #外界粒子数目
 
@@ -662,8 +663,9 @@ class ParticleSystem:
             from readwrite.read_vdb import read_vdb
 
             vdb_path = self.cfg.get_cfg("vdbPath")
-            vdb_obj_name = self.cfg.get_cfg("vdbObjName")
-            self.vdbs = read_vdb(vdb_path, vdb_obj_name, 1, 10)
+            grid_name = self.cfg.get_cfg("vdbObjName")
+            vdb_range = self.cfg.get_cfg("vdbRange")
+            self.vdbs = read_vdb(vdb_path, grid_name,  vdb_range[0], vdb_range[1])
             # num_pts = self.vdbs[0].shape[0] #外界粒子数目
 
         self.pts = ti.Vector.field(3,dtype=float, shape=self.num_pts)
