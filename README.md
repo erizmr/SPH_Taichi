@@ -1,58 +1,52 @@
-# SPH Taichi
+# tiMusicFluid
+taichi Hackathon 参赛：随着音乐起舞的流体仿真模拟。
 
-A high-performance implementation of Smooth Particle Hydrodynamics (SPH) simulator in [Taichi](https://github.com/taichi-dev/taichi). (working in progress)
+- 团队名：啊~对对队-
+- 项目名：tiMusicFluid (音乐流体)
 
-## Examples
+## 项目介绍
 
-- Dragon Bath (~420 K particles, ~280 FPS on RTX 3090 GPU, with timestep 4e-4)
+随着音乐起舞的流体仿真模拟。
 
-<p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/data/gif/dragon_bath_large.gif" width="50%" height="50%" />
-</p>
+灵感来源：请看这个MV： https://www.youtube.com/watch?v=Q3oItpVa9fs
 
-- Armadillo Bath (~1.74 M particles, ~80 FPS on RTX 3090 GPU, with timestep 4e-4)
+借助第三方商软：Houdini
 
-<p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/data/gif/armadillo_bath.gif" width="50%" height="50%" />
-</p>
+从python / Houdini 预处理音频文件，得到数据后送入taichi所写的物理仿真程序（暂定SPH）。根据音频数据改变施加到每个粒子上面的受力，从而让流体随着音乐“起舞”。最后送入Houdini渲染结果。
 
-## Features
+## 项目计划
+计划步骤如下：
 
-Currently, the following features have been implemented:
-- Cross-platform: Windows, Linux
-- Support massively parallel GPU computing
-- Weakly Compressible SPH (WCSPH)[1]
-- One-way/two-way fluid-solid coupling[2]
-- Shape-matching based rigid-body simulator[3]
-- Neighborhood search accelerated by GPU parallel prefix sum + counting sort
-
-### Note
-The GPU parallel prefix sum is only supported by cuda/vulkan backend currently. 
-
-## Install
-
-```
-python -m pip install -r requirements.txt
-```
-
-To reproduce the demos show above:
-
-```
-python run_simulation.py --scene_file ./data/scenes/dragon_bath.json
-```
-
-```
-python run_simulation.py --scene_file ./data/scenes/armadillo_bath_dynamic.json
-```
+1. 频谱分析：采用Houdini预处理
 
 
-## Reference
-1. M. Becker and M. Teschner (2007). "Weakly compressible SPH for free surface flows". In:Proceedings of the 2007 ACM SIGGRAPH/Eurographics symposium on Computer animation. Eurographics Association, pp. 209–217.
-2. N. Akinci, M. Ihmsen, G. Akinci, B. Solenthaler, and M. Teschner. 2012. Versatile
-rigid-fluid coupling for incompressible SPH. ACM Transactions on Graphics 31, 4 (2012), 62:1–62:8.
-3. Miles Macklin, Matthias Müller, Nuttapong Chentanez, and Tae-Yong Kim. 2014. Unified particle physics for real-time applications. ACM Trans. Graph. 33, 4, Article 153 (July 2014), 12 pages.
 
 
-## Acknowledgement
-Implementation is largely inspired by [SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH).
- 
+参考
+
+https://www.tokeru.com/cgwiki/index.php?title=HoudiniChops
+
+![image](https://user-images.githubusercontent.com/48758868/203838795-09e5e485-b620-4a3d-8468-099aee0f5db8.png)
+
+测试效果如以下视频：
+
+https://www.bilibili.com/video/BV1B3411f7b2/?spm_id_from=333.999.0.0
+
+
+2. 转换音频数据为力场/速度场数据
+
+3. 采用Taichi进行SPH仿真，将场数据施加到粒子上。
+
+借助开源库：拟借助zmr的SPH_Taichi
+
+https://github.com/erizmr/SPH_Taichi
+
+测试力场视频
+
+https://www.bilibili.com/video/BV1XG4y1R7tu/?spm_id_from=333.999.0.0&vd_source=e15eb8f98a9dde1c9cc874314025b575
+
+4. 将仿真结果返回Houdini进行渲染
+
+
+## 暂时的结果（未完成）
+https://user-images.githubusercontent.com/48758868/205440079-aa5fb6e1-3840-4419-b187-56ced810dd48.mp4
