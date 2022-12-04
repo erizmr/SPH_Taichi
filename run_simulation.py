@@ -12,7 +12,7 @@ ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SPH Taichi')
     parser.add_argument('--scene_file',
-                        default='data\scenes\sphere_dance.json',
+                        default='data\scenes\sphere_dance_with_collision.json',
                         help='scene file')
     args = parser.parse_args()
     scene_path = args.scene_file

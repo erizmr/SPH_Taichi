@@ -39,7 +39,7 @@ class ParticleSystem:
 
 
         # 实例化一个loader 计算粒子的最大数目
-        from fluid_loader import FluidLoader
+        from loader import FluidLoader
         self.loader = FluidLoader(self) 
         self.particle_max_num = self.loader.compute_particle_max_num()
 

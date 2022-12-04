@@ -335,8 +335,8 @@ class FluidLoader():
     
     def compute_cube_particle_num(self, start, end):
         num_dim = []
-        for i in range(self.dim):
+        for i in range(self.ps.dim):
             num_dim.append(
-                np.arange(start[i], end[i], self.particle_diameter))
+                np.arange(start[i], end[i], self.ps.particle_diameter))
         return reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])

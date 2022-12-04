@@ -46,10 +46,6 @@ class Solver():
         self.solver.initialize()
 
         self.ps.input_data()
-        # self.solver = solver
-        # self.ps = ps
-        # self.config = config
-        # return solver, ps, config
 
     def update(self,frame):
         print("Calling the solve()")
@@ -66,11 +62,3 @@ class Solver():
                 print(np_pos[1])
         else:
             print("Solver is undefined! Please call init() first")
-    
-
-# def test():
-#     solver1 = Sph()
-#     solver1.solve(1)
-
-# if __name__ == "__main__":
-#     test()
