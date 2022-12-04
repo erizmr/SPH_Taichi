@@ -13,10 +13,11 @@ python -m pip install -r requirements.txt
 
 Run
 ```
-python run_simulation.py --scene_file data/scenes/dragon_bath.json
+python run_simulation.py
 ```
+You can also use json such as`--scene_file data/scenes/dragon_bath.json` to appoint the scene file
+也可以用 如 `--scene_file data/scenes/dragon_bath.json`来指定场景文件
 
-You can replace the scene file by .json files in data/scenes, or implement your own scene file.
 
 # Structure
 run_simulation: The enter point.
