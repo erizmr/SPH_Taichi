@@ -7,7 +7,7 @@
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000,
 		"simulationMethod": 4,
-		"gravitation": [1.5, 1.5, 1.5],
+		"gravitation": [0,0,0],
 		"centerPos": [1.5, 1.5, 1.5],
 		"timeStepSize": 0.004,
 		"stiffness": 50000,
@@ -17,7 +17,9 @@
 		"exportPly": false,
 		"exportObj": false,
 		"readPly": false,
-		"plyPath": "E:/codes/try/tiReadPly/test_clip/points"
+		"plyPath": "E:/codes/try/tiReadPly/test_clip/points",
+		"enableDance":true
+		
 	},
 	"FluidBodies": [
 		{

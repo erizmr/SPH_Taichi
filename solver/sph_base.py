@@ -21,8 +21,10 @@ class SPHBase:
         self.dt[None] = 1e-4
 
         # MYADD
-        self.center_pos = np.array(self.ps.cfg.get_cfg("centerPos"))
-        self.dance_impulse = ti.field(float, shape=self.ps.particle_max_num)
+        self.enable_dance = self.ps.cfg.get_cfg("enableDance")
+        if (self.enable_dance == True):
+            self.center_pos = np.array(self.ps.cfg.get_cfg("centerPos"))
+            self.dance_impulse = ti.field(float, shape=self.ps.particle_max_num)
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -282,9 +284,13 @@ class SPHBase:
     def step(self, cnt):
         self.ps.cnt[None] = cnt
         # print(self.ps.cnt[None])
+        if(self.ps.cfg.get_cfg("readPly")):
+            self.ps.update_data(self.ps.plys[cnt])
+        if(self.ps.cfg.get_cfg("enableDance")):
+            self.compute_dance_impluse()
+        
         self.ps.ns.initialize_particle_system()
         self.compute_moving_boundary_volume()
-        self.compute_dance_impluse()
         self.substep()
         self.solve_rigid_body()
         if self.ps.dim == 2:

@@ -47,8 +47,8 @@ class FluidLoader():
             rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
             is_success = tm.repair.fill_holes(mesh)
             # print("Is the mesh successfully repaired? ", is_success)
-        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
-        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
+        voxelized_mesh = mesh.voxelized(pitch=self.ps.particle_diameter)
+        voxelized_mesh = mesh.voxelized(pitch=self.ps.particle_diameter).fill()
         # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
         # mesh.show()
         voxelized_points_np = voxelized_mesh.points + offset
@@ -137,7 +137,7 @@ class FluidLoader():
             if is_dynamic:
                 velocity = np.array(rigid_body["velocity"], dtype=np.float32)
             else:
-                velocity = np.array([0.0 for _ in range(self.dim)], dtype=np.float32)
+                velocity = np.array([0.0 for _ in range(self.ps.dim)], dtype=np.float32)
             density = rigid_body["density"]
             color = np.array(rigid_body["color"], dtype=np.int32)
             self.add_particles(obj_id,
@@ -185,10 +185,10 @@ class FluidLoader():
                  velocity=None):
 
         num_dim = []
-        for i in range(self.dim):
+        for i in range(self.ps.dim):
             num_dim.append(
                 np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
-                          self.particle_diameter))
+                          self.ps.particle_diameter))
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         print('particle num ', num_new_particles)
@@ -281,7 +281,7 @@ class FluidLoader():
         fluid_particle_num = 0
         for fluid in self.fluid_blocks:
             particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
-            self.fluid["particleNum"] = particle_num
+            fluid["particleNum"] = particle_num
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
         return fluid_particle_num
@@ -313,7 +313,7 @@ class FluidLoader():
         for rigid_body in self.rigid_bodies:
             voxelized_points_np = self.load_rigid_body(rigid_body)
             rigid_body["particleNum"] = voxelized_points_np.shape[0]
-            self.rigid_body["voxelizedPoints"] = voxelized_points_np
+            rigid_body["voxelizedPoints"] = voxelized_points_np
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
         return rigid_particle_num

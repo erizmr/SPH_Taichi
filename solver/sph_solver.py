@@ -52,7 +52,6 @@ class Solver():
         if self.solver!=None:
 
             print("current frame: ", frame)
-            self.ps.update_data()
             self.solver.step(frame)
 
             if self.config.get_cfg("exportPly") == True:

@@ -8,7 +8,6 @@ from readwrite.read_ply import read_ply
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SPH Taichi')
     parser.add_argument('--scene_file',
@@ -85,46 +84,45 @@ if __name__ == "__main__":
             if window.event.key in [ti.ui.SPACE]:
                 pause[None] = not pause[None]
         
-        if(pause[None] == False):
+        if(pause[None] == False): 
             print("current frame: ", cnt)
             for i in range(substeps):
-                # ps.update_data(ps.plys[cnt])
                 solver.step(cnt)
         
             ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
-            if ps.dim == 2:
-                canvas.set_background_color(background_color)
-                canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
-            elif ps.dim == 3:
-                camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
-                scene.set_camera(camera)
+        if ps.dim == 2:
+            canvas.set_background_color(background_color)
+            canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
+        elif ps.dim == 3:
+            camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
+            scene.set_camera(camera)
 
-                scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
-                scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
+            scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
+            scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
 
-                scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
-                canvas.scene(scene)
-        
-            if output_frames:
-                if cnt % output_interval == 0:
-                    window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
-            if output_ply:
-                if cnt % output_interval == 0:
-                    obj_id = 0
-                    obj_data = ps.dump(obj_id=obj_id)
-                    np_pos = obj_data["position"]
-                    writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
-                    writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
-                    writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
-                    
-                    for r_body_id in ps.loader.object_id_rigid_body:
-                        with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
-                            e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
-                            f.write(e)
-                    cnt_ply += 1
+            scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
+            canvas.scene(scene)
+    
+        if output_frames:
+            if cnt % output_interval == 0:
+                window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
+        if output_ply:
+            if cnt % output_interval == 0:
+                obj_id = 0
+                obj_data = ps.dump(obj_id=obj_id)
+                np_pos = obj_data["position"]
+                writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
+                writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
+                writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
+                
+                for r_body_id in ps.loader.object_id_rigid_body:
+                    with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
+                        e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
+                        f.write(e)
+                cnt_ply += 1
 
-            cnt += 1
-            if end_frame!=None:
-                if cnt > end_frame:
-                    break
-            window.show()
+        cnt += 1
+        if end_frame!=None:
+            if cnt > end_frame:
+                break
+        window.show()

@@ -7,7 +7,7 @@
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000,
 		"simulationMethod": 4,
-		"gravitation": [1.5, 1.5, 1.5],
+		"gravitation": [0,0,0],
 		"centerPos": [1.5, 1.5, 1.5],
 		"timeStepSize": 0.004,
 		"stiffness": 50000,
@@ -22,7 +22,8 @@
 		"readVdb": false,
 		"vdbPath": "D:/CG/meshSequence/sphere_points_v2_vdb/sphere_points_v2_vdb",
 		"vdbObjName":"v",
-		"simEndFrame":1000
+		"simEndFrame":1000,
+		"enableDance": true
 	},
 	"FluidBodies": [
 		{

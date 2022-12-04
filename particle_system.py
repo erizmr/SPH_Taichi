@@ -2,9 +2,8 @@ import taichi as ti
 import numpy as np
 import trimesh as tm
 from config_builder import SimConfig
-from WCSPH import WCSPHSolver
-from DFSPH import DFSPHSolver
-from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
+from solver.WCSPH import WCSPHSolver
+from solver.DFSPH import DFSPHSolver
 from readwrite.read_ply import read_ply
 
 @ti.data_oriented
@@ -85,7 +84,7 @@ class ParticleSystem:
             self.color_vis_buffer = ti.Vector.field(3, dtype=float, shape=self.particle_max_num)
 
         # 实例化邻域搜索ns
-        from nsearch_gpu import NSearchGpu 
+        from nsearch.nsearch_gpu import NSearchGpu 
         self.ns = NSearchGpu(self)
         self.padding = self.ns.padding #为了便利
 
