@@ -16,6 +16,7 @@ Run
 python run_simulation.py
 ```
 You can also use json such as`--scene_file data/scenes/dragon_bath.json` to appoint the scene file
+
 也可以用 如 `--scene_file data/scenes/dragon_bath.json`来指定场景文件
 
 
