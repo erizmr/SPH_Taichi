@@ -5,20 +5,17 @@ import taichi as ti
 import numpy as np
 import sys
 sys.path.append(".")
-
 ti.init()
 
 @ti.data_oriented
 class NeighborhoodSearchHash():
     def __init__(self, pos) -> None:
         # common paramters
-        dim = 3
         self.num_particles = 100
-        particle_radius = 3.0
         h = 1.1
 
         # read positions from the test data input
-        self.positions = ti.Vector.field(dim, float, self.num_particles)
+        self.positions = ti.Vector.field(3, float, self.num_particles)
         self.positions.from_numpy(pos)
 
         # nsearch parameters
@@ -30,16 +27,16 @@ class NeighborhoodSearchHash():
         self.max_num_neighbors = 20
 
         # nsearch fields new
-        self.grid_size_hash = 2 * self.num_particles
-        self.grid_num_particles_hash = ti.field(int,self.grid_size_hash)
-        self.grid2particles_hash = ti.field(int, ((self.grid_size_hash,) + (self.max_num_particles_per_cell,)))
+        self.grid_num_hash = 2 * self.num_particles
+        self.grid_num_particles_hash = ti.field(int,self.grid_num_hash)
+        self.grid2particles_hash = ti.field(int, ((self.grid_num_hash,) + (self.max_num_particles_per_cell,)))
         self.particle_num_neighbors = ti.field(int,self.num_particles)
         self.particle_neighbors = ti.field(int, shape=((self.num_particles,) + (self.max_num_neighbors,)))
 
     
     @ti.func
     def cell2hash(self,cell):
-        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ (83492791*cell[2]))  % (self.grid_size_hash)
+        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ (83492791*cell[2]))  % (self.grid_num_hash)
         return int(res)
 
     @ti.func
