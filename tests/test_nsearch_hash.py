@@ -1,5 +1,5 @@
 '''
-测试哈希的邻域搜索
+这次换一下数据结构，为普通的taichi field
 '''
 import taichi as ti
 import numpy as np
@@ -26,8 +26,8 @@ class NeighborhoodSearchHash():
         cell_size = 2.51
         self.cell_recpr = 1.0 / cell_size
         self.neighbor_radius = h * 1.05
-        self.max_num_particles_per_cell = 100
-        self.max_num_neighbors = 100
+        self.max_num_particles_per_cell = 20
+        self.max_num_neighbors = 20
 
         # nsearch fields new
         self.grid_size_hash = 2 * self.num_particles
@@ -50,6 +50,14 @@ class NeighborhoodSearchHash():
     def is_in_grid(self,c):
         return 0 <= c[0] and c[0] < self.grid_size[0] and 0 <= c[1] and c[
             1] < self.grid_size[1]
+
+    @ti.func
+    def is_unique(self, p_i, pj):
+        flag = True
+        for nb_i in range(self.particle_num_neighbors[p_i]):
+            if self.particle_neighbors[p_i, nb_i] == pj:
+                flag = False
+        return flag
 
     @ti.kernel
     def neighborhood_search(self):
@@ -79,16 +87,18 @@ class NeighborhoodSearchHash():
                         p_j = self.grid2particles_hash[hash_to_check, j]
                         if nb_i < self.max_num_neighbors and p_j != p_i and (
                                 pos_i - self.positions[p_j]).norm() < self.neighbor_radius:
-                            self.particle_neighbors[p_i, nb_i] = p_j
-                            nb_i += 1
-            self.particle_num_neighbors[p_i] = nb_i
+                            if self.is_unique(p_i, p_j):
+                                self.particle_neighbors[p_i, nb_i] = p_j
+                                nb_i += 1
+                                self.particle_num_neighbors[p_i] = nb_i
 
 
 def test():
-    pos = np.loadtxt('E:/Dev/SPH_Taichi/tests/test_data_input_nsearch.csv',dtype=float)
+    pos = np.loadtxt('./tests/data/input_nsearch.csv',dtype=float)
     search = NeighborhoodSearchHash(pos)
     search.neighborhood_search()
-    np.savetxt('test_data_actual_output_nsearch_hash.csv', search.particle_neighbors.to_numpy(), "%d")
+    np.savetxt('./tests/data/actual_nsearch_hash.csv', search.particle_neighbors.to_numpy(), "%d")
+    np.savetxt('./tests/data/actual_neigbor_num.csv', search.particle_num_neighbors.to_numpy(), "%d")
 
 if __name__ == '__main__':
     test()
