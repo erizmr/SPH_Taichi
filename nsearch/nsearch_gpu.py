@@ -1,8 +1,9 @@
 import taichi as ti
 import numpy as np
+from particle_system import ParticleSystem
 @ti.data_oriented
 class NSearchGpu():
-    def __init__(self,ps):
+    def __init__(self,ps:ParticleSystem):
         self.ps = ps
         self.particle_max_num = ps.particle_max_num
 

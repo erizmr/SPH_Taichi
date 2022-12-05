@@ -2,9 +2,10 @@ import numpy as np
 import trimesh as tm
 import taichi as ti
 from functools import reduce
+from particle_system import ParticleSystem
 @ti.data_oriented
 class FluidLoader():
-    def __init__(self,ps):
+    def __init__(self,ps: ParticleSystem):
         self.ps = ps
         self.cfg = ps.cfg
 
