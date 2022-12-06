@@ -23,9 +23,9 @@ run_simulation: The enter point.
 
 particle_system: Store all particles data. Instantiate most other instances.
 
-loader: Load fluid blocks, fluid bodies(obj mesh), rigid bodies and rigid blocks
+utils/loader: Load fluid blocks, fluid bodies(obj mesh), rigid bodies and rigid blocks
 
-config_builder: Get the parameters from the .json file
+utils/config_builder: Get the parameters from the .json file
 
 sph_base: Solver base class
 

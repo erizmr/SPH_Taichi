@@ -16,7 +16,7 @@ class Solver():
         import argparse
         import taichi as ti
         import numpy as np
-        from config_builder import SimConfig
+        from utils.config_builder import SimConfig
         from particle_system import ParticleSystem
         print("Initilizing the SPH solver")
 
