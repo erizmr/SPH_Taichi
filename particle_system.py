@@ -1,7 +1,7 @@
 import taichi as ti
 import numpy as np
 import trimesh as tm
-from config_builder import SimConfig
+from utils.config_builder import SimConfig
 from solver.WCSPH import WCSPHSolver
 from solver.DFSPH import DFSPHSolver
 from readwrite.read_ply import read_ply
@@ -38,7 +38,7 @@ class ParticleSystem:
 
 
         # 实例化一个loader 计算粒子的最大数目
-        from loader import FluidLoader
+        from utils.loader import FluidLoader
         self.loader = FluidLoader(self) 
         self.particle_max_num = self.loader.compute_particle_max_num()
 

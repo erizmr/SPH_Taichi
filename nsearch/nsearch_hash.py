@@ -1,4 +1,6 @@
 import taichi as ti
+from particle_system import ParticleSystem
+
 @ti.data_oriented
 class NeighborhoodSearchHash():
     def __init__(self, positions:ti.template(), support_radius) -> None:
@@ -6,11 +8,7 @@ class NeighborhoodSearchHash():
         self.support_radius = support_radius
         self.num_particles = positions.shape[0]
 
-        # # read positions from the test data input
-        # self.positions = ti.Vector.field(dim, float, self.num_particles)
-        # self.positions.from_numpy(pos)
-
-        # # nsearch parameters
+        # nsearch parameters
         self.cell_size = 2 * self.support_radius #2 is heuristic, you can tune it
         self.cell_recpr = 1.0 / self.cell_size
         self.neighbor_radius = self.support_radius * 1.05
@@ -18,26 +16,34 @@ class NeighborhoodSearchHash():
         self.max_num_neighbors = 50
 
         # nsearch fields new
-        self.grid_size_hash = 2 * self.num_particles
-        self.grid_num_particles_hash = ti.field(int,self.grid_size_hash)
-        self.grid2particles_hash = ti.field(int, ((self.grid_size_hash,) + (self.max_num_particles_per_cell,)))
+        self.grid_size = 2 * self.num_particles
+        self.grid_particles_num = ti.field(int,self.grid_size)
+        self.grid2particle = ti.field(int, ((self.grid_size,) + (self.max_num_particles_per_cell,)))
         self.particle_num_neighbors = ti.field(int,self.num_particles)
         self.particle_neighbors = ti.field(int, shape=((self.num_particles,) + (self.max_num_neighbors,)))
 
     
     @ti.func
     def cell2hash(self,cell):
-        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ (83492791*cell[2]))  % (self.grid_size_hash)
+        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ (83492791*cell[2]))  % (self.grid_size)
         return int(res)
 
     @ti.func
-    def get_cell(self,pos):
+    def pos_to_index(self,pos):
         return int(pos * self.cell_recpr)
 
     @ti.func
     def is_in_grid(self,c):
         return 0 <= c[0] and c[0] < self.grid_size[0] and 0 <= c[1] and c[
             1] < self.grid_size[1]
+
+    @ti.func
+    def is_unique(self, p_i, pj):
+        flag = True
+        for nb_i in range(self.particle_num_neighbors[p_i]):
+            if self.particle_neighbors[p_i, nb_i] == pj:
+                flag = False
+        return flag
 
     @ti.kernel
     def neighborhood_search(self):
@@ -67,6 +73,7 @@ class NeighborhoodSearchHash():
                         p_j = self.grid2particles_hash[hash_to_check, j]
                         if nb_i < self.max_num_neighbors and p_j != p_i and (
                                 pos_i - self.positions[p_j]).norm() < self.neighbor_radius:
-                            self.particle_neighbors[p_i, nb_i] = p_j
-                            nb_i += 1
-            self.particle_num_neighbors[p_i] = nb_i
+                            if self.is_unique(p_i, p_j):
+                                self.particle_neighbors[p_i, nb_i] = p_j
+                                nb_i += 1
+                                self.particle_num_neighbors[p_i] = nb_i
