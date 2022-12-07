@@ -4,7 +4,10 @@ This repo forks from mrzhang's SPH Taichi. It is a SPH solver written in Taichi�
 本项目是fork自[erizmr](https://github.com/erizmr)的[SPH_Taichi](https://github.com/erizmr/SPH_Taichi)。本项目实现了一个基于taichi的SPH的流体求解器。目前处于开发状态。
 
 # Demo 
-![demo](data\gif\no_gravity_collision.gif)
+
+![no_gravity_collision](https://user-images.githubusercontent.com/48758868/206108084-fc0c9d33-baad-4a13-9913-4aeb8fd582fa.gif)
+
+
 # How to run
 
 Insall
