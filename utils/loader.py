@@ -3,6 +3,7 @@ import trimesh as tm
 import taichi as ti
 from functools import reduce
 from particle_system import ParticleSystem
+from sph_root_path import sph_root_path
 @ti.data_oriented
 class FluidLoader():
     def __init__(self,ps: ParticleSystem):
@@ -29,7 +30,7 @@ class FluidLoader():
 
     def load_rigid_body(self, rigid_body):
         obj_id = rigid_body["objectId"]
-        mesh = tm.load(rigid_body["geometryFile"])
+        mesh = tm.load(sph_root_path+rigid_body["geometryFile"])
         mesh.apply_scale(rigid_body["scale"])
         offset = np.array(rigid_body["translation"])
 
@@ -58,7 +59,7 @@ class FluidLoader():
 
     def load_fluid_body(self, fluid_body):
         obj_id = fluid_body["objectId"]
-        mesh = tm.load(fluid_body["geometryFile"])
+        mesh = tm.load(sph_root_path + fluid_body["geometryFile"])
         mesh.apply_scale(fluid_body["scale"])
         offset = np.array(fluid_body["translation"])
 

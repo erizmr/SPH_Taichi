@@ -24,7 +24,7 @@
 	"FluidBodies": [
 		{
             "objectId": 1,
-			"geometryFile": "./data/models/sphere.obj",
+			"geometryFile": "/data/models/sphere.obj",
 			"translation": [1.5, 1.5, 1.5],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0,
