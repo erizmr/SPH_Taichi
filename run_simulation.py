@@ -2,16 +2,18 @@ import os
 import argparse
 import taichi as ti
 import numpy as np
-from config_builder import SimConfig
+from utils.config_builder import SimConfig
 from particle_system import ParticleSystem
+from readwrite.read_ply import read_ply
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
+from sph_root_path import sph_root_path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SPH Taichi')
     parser.add_argument('--scene_file',
-                        default='',
+                        default=sph_root_path+'/data/scenes/sphere_dance_with_collision.json',
                         help='scene file')
     args = parser.parse_args()
     scene_path = args.scene_file
@@ -21,7 +23,7 @@ if __name__ == "__main__":
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
     output_frames = config.get_cfg("exportFrame")
     output_interval = int(0.016 / config.get_cfg("timeStepSize"))
-    output_ply = config.get_cfg("exportObj")
+    output_ply = config.get_cfg("exportPly")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
         os.makedirs(f"{scene_name}_output_img", exist_ok=True)
@@ -75,10 +77,21 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
+    end_frame = config.get_cfg("simEndFrame")
+    pause = ti.field(int,())
+
     while window.running:
-        for i in range(substeps):
-            solver.step()
-        ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
+
+        if window.get_event(ti.ui.PRESS):
+            if window.event.key in [ti.ui.SPACE]:
+                pause[None] = not pause[None]
+        
+        if(pause[None] == False): 
+            print("current frame: ", cnt)
+            for i in range(substeps):
+                solver.step(cnt)
+        
+            ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:
             canvas.set_background_color(background_color)
             canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
@@ -104,13 +117,14 @@ if __name__ == "__main__":
                 writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                 writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
                 
-                for r_body_id in ps.object_id_rigid_body:
+                for r_body_id in ps.loader.object_id_rigid_body:
                     with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
                         e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
                         f.write(e)
                 cnt_ply += 1
 
         cnt += 1
-        # if cnt > 6000:
-        #     break
+        if end_frame!=None:
+            if cnt > end_frame:
+                break
         window.show()

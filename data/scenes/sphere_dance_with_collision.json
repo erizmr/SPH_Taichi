@@ -1,0 +1,49 @@
+{
+	"Configuration": 
+	{
+        "domainStart": [0.0, 0.0, 0.0],
+        "domainEnd": [3.0, 3.0,3.0],
+		"particleRadius": 0.01,
+		"numberOfStepsPerRenderUpdate": 1,
+		"density0": 1000,
+		"simulationMethod": 4,
+		"gravitation": [0,0,0],
+		"centerPos": [1.5, 1.5, 1.5],
+		"timeStepSize": 0.004,
+		"stiffness": 50000,
+		"exponent": 7,
+		"boundaryHandlingMethod": 0,
+		"exportFrame": false,
+		"exportPly": false,
+		"exportObj": false,
+		"readPly": false,
+		"plyPath": "E:/codes/try/tiReadPly/test_clip/points",
+		"enableDance":true
+		
+	},
+	"FluidBodies": [
+		{
+            "objectId": 1,
+			"geometryFile": "/data/models/sphere.obj",
+			"translation": [1.5, 1.5, 1.5],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0,
+			"scale": [1, 1, 1],
+			"velocity": [0.0, 0.0, 0.0],
+			"density": 1000.0,
+			"color": [255, 255, 255]
+		}
+	],
+	"FluidBlocks": [
+		{
+            "objectId": 0,
+			"start": [0.0, 0.0, 0.0],
+			"end": [0.6, 0.6, 0.6],
+			"translation": [0.1, 0.1, 0.1],
+			"scale": [1, 1, 1],
+			"velocity": [0.0, 0.0, 0.0],
+			"density": 1000.0,
+			"color": [50, 100, 200]
+		}
+	]
+}

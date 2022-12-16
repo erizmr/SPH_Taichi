@@ -1,1 +1,4 @@
 __pycache__
+imgui.ini
+/tests/data/actual_*
+/data/scenes/*_output

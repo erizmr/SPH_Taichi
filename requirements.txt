@@ -1,2 +1,5 @@
 taichi>=1.2.0
 trimesh
+pyglet==1.5.27
+matplotlib
+scipy

@@ -1,58 +1,55 @@
-# SPH Taichi
+# Intro
+This repo forks from mrzhang's SPH Taichi. It is a SPH solver written in Taichi。
 
-A high-performance implementation of Smooth Particle Hydrodynamics (SPH) simulator in [Taichi](https://github.com/taichi-dev/taichi). (working in progress)
+本项目是fork自[erizmr](https://github.com/erizmr)的[SPH_Taichi](https://github.com/erizmr/SPH_Taichi)。本项目实现了一个基于taichi的SPH的流体求解器。目前处于开发状态。
 
-## Examples
+# Demo 
 
-- Dragon Bath (~420 K particles, ~280 FPS on RTX 3090 GPU, with timestep 4e-4)
+![no_gravity_collision](https://user-images.githubusercontent.com/48758868/206108084-fc0c9d33-baad-4a13-9913-4aeb8fd582fa.gif)
 
-<p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/data/gif/dragon_bath_large.gif" width="50%" height="50%" />
-</p>
 
-- Armadillo Bath (~1.74 M particles, ~80 FPS on RTX 3090 GPU, with timestep 4e-4)
+# How to run
 
-<p align="center">
-  <img src="https://github.com/erizmr/SPH_Taichi/blob/master/data/gif/armadillo_bath.gif" width="50%" height="50%" />
-</p>
-
-## Features
-
-Currently, the following features have been implemented:
-- Cross-platform: Windows, Linux
-- Support massively parallel GPU computing
-- Weakly Compressible SPH (WCSPH)[1]
-- One-way/two-way fluid-solid coupling[2]
-- Shape-matching based rigid-body simulator[3]
-- Neighborhood search accelerated by GPU parallel prefix sum + counting sort
-
-### Note
-The GPU parallel prefix sum is only supported by cuda/vulkan backend currently. 
-
-## Install
-
+Insall
 ```
 python -m pip install -r requirements.txt
 ```
 
-To reproduce the demos show above:
-
+Run
 ```
-python run_simulation.py --scene_file ./data/scenes/dragon_bath.json
+python run_simulation.py
 ```
+You can also use json such as`--scene_file data/scenes/dragon_bath.json` to appoint the scene file
 
-```
-python run_simulation.py --scene_file ./data/scenes/armadillo_bath_dynamic.json
-```
-
-
-## Reference
-1. M. Becker and M. Teschner (2007). "Weakly compressible SPH for free surface flows". In:Proceedings of the 2007 ACM SIGGRAPH/Eurographics symposium on Computer animation. Eurographics Association, pp. 209–217.
-2. N. Akinci, M. Ihmsen, G. Akinci, B. Solenthaler, and M. Teschner. 2012. Versatile
-rigid-fluid coupling for incompressible SPH. ACM Transactions on Graphics 31, 4 (2012), 62:1–62:8.
-3. Miles Macklin, Matthias Müller, Nuttapong Chentanez, and Tae-Yong Kim. 2014. Unified particle physics for real-time applications. ACM Trans. Graph. 33, 4, Article 153 (July 2014), 12 pages.
+也可以用 如 `--scene_file data/scenes/dragon_bath.json`来指定场景文件
 
 
-## Acknowledgement
-Implementation is largely inspired by [SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH).
- 
+# Structure
+run_simulation: The enter point.
+
+particle_system: Store all particles data. Instantiate most other instances.
+
+utils/loader: Load fluid blocks, fluid bodies(obj mesh), rigid bodies and rigid blocks
+
+utils/config_builder: Get the parameters from the .json file
+
+sph_base: Solver base class
+
+WCSPH/IISPH/DFSPH: The implementations of different SPH solvers
+
+nsearch_gpu/nsearch_hash: The gpu and cpu neighborhood search, respectively.
+
+readwrite/*: ply sequence andd vdb sequence reader
+
+data/models/*: Mesh files
+
+data/*.json: Scence files.
+
+tests/*: Test files.
+
+# Difference between original repo
+- 对particle_system进行了重构。流体刚体的导入分离到单独loader模块。邻域搜索分离为单独模块。
+- 实现了新的cpu的hash邻域搜索。参考taichi官方的pbf邻域搜索实现的3维hash版本。
+- ply和vdb序列的导入器。注意：pyopenvdb的安装较为复杂，编译c++版本的vdb后，请参考tests/test_vdb_read.py 导入相应的dll文件后使用。
+- (WIP) dance_impulse。音乐节奏冲量。在外来输入数据指定网格上施加冲量。配合新增的sphere_dance.json使用。后续会重构，BUG较多。
+- (WIP) sph_solver: 除了run_simulation以外的另一个入口。单纯作为一个引擎使用。分为init和update两步。原本用于houdini中的python模块。
