@@ -207,7 +207,7 @@ class SPHBase:
             if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
                 q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id]
                 p = self.ps.x[p_i] - cm
-                A += self.ps.m_V0 * self.ps.density[p_i] * p @ q.transpose()
+                A += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
 
         R, S = ti.polar_decompose(A)
         
