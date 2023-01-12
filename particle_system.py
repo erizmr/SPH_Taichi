@@ -89,7 +89,8 @@ class ParticleSystem:
         #========== Allocate memory ==========#
         # Rigid body properties
         if self.num_rigid_bodies > 0:
-            self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_rigid_bodies)
+            # TODO: Here we actually only need to store rigid boides, however the object id of rigid may not start from 0, so allocate center of mass for all objects
+            self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_rigid_bodies + len(fluid_blocks))
 
         # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
@@ -492,7 +493,7 @@ class ParticleSystem:
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
         # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
-        # mesh.show()
+        # voxelized_mesh.show()
         voxelized_points_np = voxelized_mesh.points + offset
         print(f"rigid body {obj_id} num: {voxelized_points_np.shape[0]}")
         
