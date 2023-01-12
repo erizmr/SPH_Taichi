@@ -48,7 +48,7 @@ if __name__ == "__main__":
         print(f"Iter: {n}, Loss={solver.ps.loss[None]} x avg: {ps.objects_center[obj_to_opt_id][None]}")
     else:
 
-        window = ti.ui.Window('SPH', (1024, 1024), show_window=False, vsync=True)
+        window = ti.ui.Window('SPH', (1024, 1024), show_window=True, vsync=True)
 
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
@@ -128,4 +128,4 @@ if __name__ == "__main__":
             cnt += 1
             # if cnt > 6000:
             #     break
-            # window.show()
+            window.show()

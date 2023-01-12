@@ -12,7 +12,7 @@
 		"stiffness": 50000,
 		"exponent": 7,
 		"boundaryHandlingMethod": 0,
-		"exportFrame": true,
+		"exportFrame": false,
 		"exportPly": false,
 		"exportObj": false
 	},
