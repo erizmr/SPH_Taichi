@@ -115,6 +115,16 @@ class ParticleSystem:
         if self.cfg.get_cfg("simulationMethod") == 4:
             self.dfsph_factor = ti.field(dtype=float, shape=self.particle_max_num)
             self.density_adv = ti.field(dtype=float, shape=self.particle_max_num)
+        
+        # Variables for backward use
+        self.loss = ti.field(dtype=float, shape=(), needs_grad=True)
+        self.target_position = [3.0, 1.0, 0.0]
+        self.objects_center = ti.Vector.field(self.dim, dtype=float, shape=(self.num_rigid_bodies + len(fluid_blocks)), needs_grad=True)
+        self.sum_ret = ti.field(dtype=float, shape=(), needs_grad=True)
+        self.cm_ret = ti.Vector.field(self.dim, dtype=float, shape=(), needs_grad=True)
+        self.A_ret = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=(), needs_grad=True)
+        self.R_ret = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=(), needs_grad=True)
+     
 
         # Buffer for sort
         self.object_id_buffer = ti.field(dtype=int, shape=self.particle_max_num)
@@ -369,9 +379,14 @@ class ParticleSystem:
                 self.density_adv[I] = self.density_adv_buffer[I]
     
 
+    @ti.ad.no_grad
+    def prefix_sum(self):
+        self.prefix_sum_executor.run(self.grid_particles_num)
+
+
     def initialize_particle_system(self):
         self.update_grid_id()
-        self.prefix_sum_executor.run(self.grid_particles_num)
+        self.prefix_sum()
         self.counting_sort()
     
 

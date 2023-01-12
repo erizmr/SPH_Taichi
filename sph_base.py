@@ -192,34 +192,101 @@ class SPHBase:
         return cm
     
 
+    # @ti.kernel
+    # def compute_com_kernel(self, object_id: int)->ti.types.vector(3, float):
+    #     return self.compute_com(object_id)
+    
     @ti.kernel
-    def compute_com_kernel(self, object_id: int)->ti.types.vector(3, float):
-        return self.compute_com(object_id)
+    def compute_com_kernel(self, object_id: int):
+        for _ in range(1):
+            self.ps.sum_ret[None] = 0.0
+            self.ps.cm_ret[None] = ti.Vector([0.0, 0.0, 0.0])
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
+                mass = self.ps.m_V0 * self.ps.density[p_i]
+                self.ps.cm_ret[None] += mass * self.ps.x[p_i]
+                self.ps.sum_ret[None] += mass
+        for _ in range(1):
+            self.ps.cm_ret[None] /= self.ps.sum_ret[None]
 
 
     @ti.kernel
-    def solve_constraints(self, object_id: int) -> ti.types.matrix(3, 3, float):
-        # compute center of mass
-        cm = self.compute_com(object_id)
-        # A
-        A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    def compute_A(self, object_id: int):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
                 q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id]
-                p = self.ps.x[p_i] - cm
-                A += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
+                p = self.ps.x[p_i] - self.ps.cm_ret[None]
+                self.ps.A_ret[None] += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
+    
+    # @ti.func
+    # def ssvd(self, F):
+    #     U, sig, V = ti.svd(F)
+    #     if U.determinant() < 0:
+    #         for i in ti.static(range(3)):
+    #             U[i, 2] *= -1
+    #         sig[2, 2] = -sig[2, 2]
+    #     if V.determinant() < 0:
+    #         for i in ti.static(range(3)):
+    #             V[i, 2] *= -1
+    #         sig[2, 2] = -sig[2, 2]
+    #     return U, sig, V
 
-        R, S = ti.polar_decompose(A)
-        
-        if all(abs(R) < 1e-6):
-            R = ti.Matrix.identity(ti.f32, 3)
-        
+    # @ti.kernel
+    # def polar_decompose(self):
+    #     U, sig, V = self.ssvd(self.ps.A_ret[None])
+    #     R = U @ V.transpose()
+    #     if all(abs(R) < 1e-6):
+    #         R = ti.Matrix.identity(ti.f32, 3)
+    #     self.ps.R_ret[None] = R
+    
+    @ti.kernel
+    def polar_decompose(self):
+        for _ in range(1):
+            A = self.ps.A_ret[None]
+            R, S = ti.polar_decompose(A)
+            if all(abs(R) < 1e-6):
+                R = ti.Matrix.identity(ti.f32, 3)
+            self.ps.R_ret[None] = R
+
+
+    @ti.kernel
+    def update_matched_pos(self, object_id: int):
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
-                goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id])
+                goal = self.ps.cm_ret[None] + self.ps.R_ret[None] @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id])
                 corr = (goal - self.ps.x[p_i]) * 1.0
                 self.ps.x[p_i] += corr
-        return R
+
+
+    # @ti.kernel
+    def solve_constraints(self, object_id: int): #-> ti.types.matrix(3, 3, float):
+        # compute center of mass
+        # cm = self.compute_com(object_id)
+        self.compute_com_kernel(object_id)
+        # cm = self.ps.cm_ret[None]
+        
+        # A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+        # for p_i in range(self.ps.particle_num[None]):
+        #     if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
+        #         q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id]
+        #         p = self.ps.x[p_i] - cm
+        #         A += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
+
+        # R, S = ti.polar_decompose(A)
+        
+        # if all(abs(R) < 1e-6):
+        #     R = ti.Matrix.identity(ti.f32, 3)
+
+        self.polar_decompose()
+        
+        # for p_i in range(self.ps.particle_num[None]):
+        #     if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
+        #         goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id])
+        #         corr = (goal - self.ps.x[p_i]) * 1.0
+        #         self.ps.x[p_i] += corr
+        self.update_matched_pos(object_id)
+
+        # return R
         
 
     # @ti.kernel
@@ -247,9 +314,11 @@ class SPHBase:
     def solve_rigid_body(self):
         for i in range(1):
             for r_obj_id in self.ps.object_id_rigid_body:
-                R = self.solve_constraints(r_obj_id)
+                # R = self.solve_constraints(r_obj_id)
+                self.solve_constraints(r_obj_id)
 
                 if self.ps.cfg.get_cfg("exportObj"):
+                    R = self.ps.R_ret[None]
                     # For output obj only: update the mesh
                     cm = self.compute_com_kernel(r_obj_id)
                     ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
