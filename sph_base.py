@@ -17,8 +17,8 @@ class SPHBase:
         self.density_0 = 1000.0  # reference density
         self.density_0 = self.ps.cfg.get_cfg("density0")
 
-        self.dt = ti.field(float, shape=())
-        self.dt[None] = 1e-4
+        # self.dt = ti.field(float, shape=())
+        self.ps.dt[None] = 1e-4
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -88,29 +88,66 @@ class SPHBase:
     def compute_rigid_rest_cm(self, object_id: int):
         self.ps.rigid_rest_cm[object_id] = self.compute_com(object_id)
 
+    # @ti.kernel
+    # def compute_static_boundary_volume(self):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.is_static_rigid_body(p_i):
+    #             delta = self.cubic_kernel(0.0)
+    #             self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
+    #             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+
+    # @ti.func
+    # def compute_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
+    #     if self.ps.material[p_j] == self.ps.material_solid:
+    #         delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
+
+
+    # @ti.kernel
+    # def compute_moving_boundary_volume(self):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.is_dynamic_rigid_body(p_i):
+    #             delta = self.cubic_kernel(0.0)
+    #             self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
+    #             self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+
     @ti.kernel
     def compute_static_boundary_volume(self):
         for p_i in ti.grouped(self.ps.x):
-            if not self.ps.is_static_rigid_body(p_i):
-                continue
-            delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
-            self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            if self.ps.is_static_rigid_body(p_i):
+                for _ in range(1):
+                    self.ps.m_V[p_i] = self.cubic_kernel(0.0)
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+                    center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+                    grid_index = self.ps.flatten_grid_index(center_cell + offset)
+                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+                        if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+                            self.compute_boundary_volume_task(p_i, p_j)
+                for _ in range(1):
+                    self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+
 
     @ti.func
-    def compute_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
+    def compute_boundary_volume_task(self, p_i, p_j):
         if self.ps.material[p_j] == self.ps.material_solid:
-            delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
+            self.ps.m_V[p_i] += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
 
 
     @ti.kernel
     def compute_moving_boundary_volume(self):
         for p_i in ti.grouped(self.ps.x):
-            if not self.ps.is_dynamic_rigid_body(p_i):
-                continue
-            delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
-            self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            if self.ps.is_dynamic_rigid_body(p_i):
+                for _ in range(1):
+                    self.ps.m_V[p_i] = self.cubic_kernel(0.0)
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+                    center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+                    grid_index = self.ps.flatten_grid_index(center_cell + offset)
+                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+                        if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+                            self.compute_boundary_volume_task(p_i, p_j)
+                for _ in range(1):
+                    self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+
+
 
     def substep(self):
         pass
@@ -218,35 +255,36 @@ class SPHBase:
                 p = self.ps.x[p_i] - self.ps.cm_ret[None]
                 self.ps.A_ret[None] += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
     
-    # @ti.func
-    # def ssvd(self, F):
-    #     U, sig, V = ti.svd(F)
-    #     if U.determinant() < 0:
-    #         for i in ti.static(range(3)):
-    #             U[i, 2] *= -1
-    #         sig[2, 2] = -sig[2, 2]
-    #     if V.determinant() < 0:
-    #         for i in ti.static(range(3)):
-    #             V[i, 2] *= -1
-    #         sig[2, 2] = -sig[2, 2]
-    #     return U, sig, V
+    @ti.func
+    def ssvd(self, F):
+        U, sig, V = ti.svd(F)
+        if U.determinant() < 0:
+            for i in ti.static(range(3)):
+                U[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        if V.determinant() < 0:
+            for i in ti.static(range(3)):
+                V[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        return U, sig, V
 
-    # @ti.kernel
-    # def polar_decompose(self):
-    #     U, sig, V = self.ssvd(self.ps.A_ret[None])
-    #     R = U @ V.transpose()
-    #     if all(abs(R) < 1e-6):
-    #         R = ti.Matrix.identity(ti.f32, 3)
-    #     self.ps.R_ret[None] = R
-    
     @ti.kernel
     def polar_decompose(self):
         for _ in range(1):
-            A = self.ps.A_ret[None]
-            R, S = ti.polar_decompose(A)
-            if all(abs(R) < 1e-6):
-                R = ti.Matrix.identity(ti.f32, 3)
+            U, sig, V = self.ssvd(self.ps.A_ret[None])
+            R = U @ V.transpose()
+            # if all(abs(R) < 1e-6):
+            #     R = ti.Matrix.identity(ti.f32, 3)
             self.ps.R_ret[None] = R
+    
+    # @ti.kernel
+    # def polar_decompose(self):
+    #     for _ in range(1):
+    #         A = self.ps.A_ret[None]
+    #         R, S = ti.polar_decompose(A)
+    #         if all(abs(R) < 1e-6):
+    #             R = ti.Matrix.identity(ti.f32, 3)
+    #         self.ps.R_ret[None] = R
 
 
     @ti.kernel
@@ -262,7 +300,9 @@ class SPHBase:
     def solve_constraints(self, object_id: int): #-> ti.types.matrix(3, 3, float):
         # compute center of mass
         # cm = self.compute_com(object_id)
+
         self.compute_com_kernel(object_id)
+
         # cm = self.ps.cm_ret[None]
         
         # A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])

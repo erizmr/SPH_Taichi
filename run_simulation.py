@@ -1,3 +1,4 @@
+from itertools import filterfalse
 import os
 import argparse
 import taichi as ti
@@ -39,13 +40,15 @@ if __name__ == "__main__":
     if args.train:
         obj_to_opt_id =1
         total_opt_steps = 10
+        sim_steps = 100
         for n in range(total_opt_steps):
+            ps.objects_center[obj_to_opt_id] = [0, 0, 0]
             with ti.ad.Tape(loss=solver.ps.loss):
-                for i in range(substeps):
+                for i in range(sim_steps):
                     solver.step()
                 solver.compute_avg_pos(obj_to_opt_id, solver.ps.object_collection[obj_to_opt_id]["particleNum"])
                 solver.compute_loss(obj_to_opt_id)
-        print(f"Iter: {n}, Loss={solver.ps.loss[None]} x avg: {ps.objects_center[obj_to_opt_id][None]}")
+            print(f"Iter: {n}, Loss={solver.ps.loss[None]} x avg: {ps.objects_center[obj_to_opt_id]}")
     else:
 
         window = ti.ui.Window('SPH', (1024, 1024), show_window=True, vsync=True)
@@ -82,10 +85,10 @@ if __name__ == "__main__":
         box_anchors[6] = ti.Vector([x_max, 0.0, z_max])
         box_anchors[7] = ti.Vector([x_max, y_max, z_max])
 
-        box_lines_indices = ti.field(int, shape=(2 * 12))
+        # box_lines_indices = ti.field(int, shape=(2 * 12))
 
-        for i, val in enumerate([0, 1, 0, 2, 1, 3, 2, 3, 4, 5, 4, 6, 5, 7, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7]):
-            box_lines_indices[i] = val
+        # for i, val in enumerate([0, 1, 0, 2, 1, 3, 2, 3, 4, 5, 4, 6, 5, 7, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7]):
+        #     box_lines_indices[i] = val
 
         cnt = 0
         cnt_ply = 0

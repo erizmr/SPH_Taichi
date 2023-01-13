@@ -13,7 +13,7 @@ class WCSPHSolver(SPHBase):
         self.stiffness = self.ps.cfg.get_cfg("stiffness")
         
         self.surface_tension = 0.01
-        self.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
+        self.ps.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
     
 
     # @ti.func
@@ -223,16 +223,16 @@ class WCSPHSolver(SPHBase):
         x_i = self.ps.x[p_i]
         
         ############## Surface Tension ###############
-        if self.ps.material[p_j] == self.ps.material_fluid:
-            # Fluid neighbors
-            diameter2 = self.ps.particle_diameter * self.ps.particle_diameter
-            x_j = self.ps.x[p_j]
-            r = x_i - x_j
-            r2 = r.dot(r)
-            if r2 > diameter2:
-                self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(r.norm())
-            else:
-                self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(ti.Vector([self.ps.particle_diameter, 0.0, 0.0]).norm())
+        # if self.ps.material[p_j] == self.ps.material_fluid:
+        #     # Fluid neighbors
+        #     diameter2 = self.ps.particle_diameter * self.ps.particle_diameter
+        #     x_j = self.ps.x[p_j]
+        #     r = x_i - x_j
+        #     r2 = r.dot(r)
+        #     if r2 > diameter2:
+        #         self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(r.norm())
+        #     else:
+        #         self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(ti.Vector([self.ps.particle_diameter, 0.0, 0.0]).norm())
             
         
         ############### Viscosoty Force ###############
@@ -286,8 +286,8 @@ class WCSPHSolver(SPHBase):
         # Symplectic Euler
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:
-                self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
-                self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
+                self.ps.v[p_i] += self.ps.dt[None] * self.ps.acceleration[p_i]
+                self.ps.x[p_i] += self.ps.dt[None] * self.ps.v[p_i]
 
 
     def substep(self):

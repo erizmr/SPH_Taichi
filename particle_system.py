@@ -5,7 +5,7 @@ from functools import reduce
 from config_builder import SimConfig
 from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
-from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
+# from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
 class ParticleSystem:
@@ -25,6 +25,9 @@ class ParticleSystem:
         assert self.dim > 1
         # Simulation method
         self.simulation_method = self.cfg.get_cfg("simulationMethod")
+
+        # Time step size
+        self.dt = ti.field(dtype=float, shape=())
 
         # Material
         self.material_solid = 0
@@ -84,7 +87,8 @@ class ParticleSystem:
 
         #### TODO: Handle the Particle Emitter ####
         # self.particle_max_num += emitted particles
-        print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
+        # print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
+        print(f"Particle max num: {self.particle_max_num}")
 
         #========== Allocate memory ==========#
         # Rigid body properties
@@ -124,6 +128,7 @@ class ParticleSystem:
         self.cm_ret = ti.Vector.field(self.dim, dtype=float, shape=(), needs_grad=True)
         self.A_ret = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=(), needs_grad=True)
         self.R_ret = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=(), needs_grad=True)
+        self.volume_ret = ti.field(dtype=float, shape=(), needs_grad=True)
      
 
         # Buffer for sort
@@ -355,9 +360,9 @@ class ParticleSystem:
             self.color_buffer[new_index] = self.color[I]
             self.is_dynamic_buffer[new_index] = self.is_dynamic[I]
 
-            if ti.static(self.simulation_method == 4):
-                self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
-                self.density_adv_buffer[new_index] = self.density_adv[I]
+            # if ti.static(self.simulation_method == 4):
+            #     self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
+            #     self.density_adv_buffer[new_index] = self.density_adv[I]
         
         for I in ti.grouped(self.x):
             self.grid_ids[I] = self.grid_ids_buffer[I]
@@ -374,9 +379,9 @@ class ParticleSystem:
             self.color[I] = self.color_buffer[I]
             self.is_dynamic[I] = self.is_dynamic_buffer[I]
 
-            if ti.static(self.simulation_method == 4):
-                self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
-                self.density_adv[I] = self.density_adv_buffer[I]
+            # if ti.static(self.simulation_method == 4):
+            #     self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
+            #     self.density_adv[I] = self.density_adv_buffer[I]
     
 
     @ti.ad.no_grad
