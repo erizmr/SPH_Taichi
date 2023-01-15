@@ -44,28 +44,53 @@ class SPHBase:
         return res
 
     @ti.func
-    def cubic_kernel_derivative(self, r):
+    def cubic_kernel_derivative(self, r_norm):
         h = self.ps.support_radius
         # derivative of cubic spline smoothing kernel
-        k = 1.0
-        if self.ps.dim == 1:
-            k = 4 / 3
-        elif self.ps.dim == 2:
-            k = 40 / 7 / np.pi
-        elif self.ps.dim == 3:
-            k = 8 / np.pi
-        k = 6. * k / h ** self.ps.dim
-        r_norm = r.norm()
+        # k = 1.0
+        # if self.ps.dim == 1:
+        #     k = 4 / 3
+        # elif self.ps.dim == 2:
+        #     k = 40 / 7 / np.pi
+        # elif self.ps.dim == 3:
+        #     k = 8 / np.pi
+
+        k = 6. * 8 / np.pi / h ** self.ps.dim
+        # r_norm = r.norm(1e-5)
         q = r_norm / h
-        res = ti.Vector([0.0 for _ in range(self.ps.dim)])
-        if r_norm > 1e-5 and q <= 1.0:
-            grad_q = r / (r_norm * h)
-            if q <= 0.5:
-                res = k * q * (3.0 * q - 2.0) * grad_q
-            else:
-                factor = 1.0 - q
-                res = k * (-factor * factor) * grad_q
+        # res = ti.Vector([0.0 for _ in range(self.ps.dim)])
+        res = ti.cast(0.0, ti.f32)
+        grad_q = 1 / (r_norm * h)
+        if q <= 0.5:
+            res = k * q * (3.0 * q - 2.0) * grad_q
+        elif q <= 1.0:
+            factor = 1.0 - q
+            res = k * (-factor * factor) * grad_q
         return res
+
+    # @ti.func
+    # def cubic_kernel_derivative(self, r):
+    #     h = self.ps.support_radius
+    #     # derivative of cubic spline smoothing kernel
+    #     k = 1.0
+    #     if self.ps.dim == 1:
+    #         k = 4 / 3
+    #     elif self.ps.dim == 2:
+    #         k = 40 / 7 / np.pi
+    #     elif self.ps.dim == 3:
+    #         k = 8 / np.pi
+    #     k = 6. * k / h ** self.ps.dim
+    #     r_norm = r.norm()
+    #     q = r_norm / h
+    #     res = ti.Vector([0.0 for _ in range(self.ps.dim)])
+    #     if r_norm > 1e-5 and q <= 1.0:
+    #         grad_q = r / (r_norm * h)
+    #         if q <= 0.5:
+    #             res = k * q * (3.0 * q - 2.0) * grad_q
+    #         else:
+    #             factor = 1.0 - q
+    #             res = k * (-factor * factor) * grad_q
+    #     return res
 
     @ti.func
     def viscosity_force(self, p_i, p_j, r):
@@ -276,6 +301,7 @@ class SPHBase:
             # if all(abs(R) < 1e-6):
             #     R = ti.Matrix.identity(ti.f32, 3)
             self.ps.R_ret[None] = R
+        
     
     # @ti.kernel
     # def polar_decompose(self):
