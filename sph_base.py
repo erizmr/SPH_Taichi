@@ -119,7 +119,7 @@ class SPHBase:
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
                     center_cell = self.ps.pos_to_index(self.ps.x[p_i])
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
-                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[ti.max(0, grid_index)]):
                         if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
                             self.compute_boundary_volume_task(p_i, p_j)
                 for _ in range(1):
@@ -141,7 +141,7 @@ class SPHBase:
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
                     center_cell = self.ps.pos_to_index(self.ps.x[p_i])
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
-                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[ti.max(0, grid_index)]):
                         if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
                             self.compute_boundary_volume_task(p_i, p_j)
                 for _ in range(1):
