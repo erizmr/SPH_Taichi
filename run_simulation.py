@@ -1,4 +1,3 @@
-from itertools import filterfalse
 import os
 import time
 import argparse
@@ -7,7 +6,7 @@ import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 
-ti.init(arch=ti.gpu, device_memory_GB=8.0, print_ir=True,  debug=False, kernel_profiler=True)
+ti.init(arch=ti.gpu, device_memory_GB=8.0, print_ir=False, debug=False, kernel_profiler=True)
 
 
 if __name__ == "__main__":
@@ -18,6 +17,10 @@ if __name__ == "__main__":
     parser.add_argument('--train',
                         action='store_true',
                         help='training')
+    parser.add_argument('--steps',
+                        default=400,
+                        type=int,
+                        help='scene file')
     args = parser.parse_args()
     scene_path = args.scene_file
     config = SimConfig(scene_file_path=scene_path)
@@ -42,12 +45,12 @@ if __name__ == "__main__":
     ps.target_position = [2.5, 1.0, 1.0]
 
     if args.train:
-        obj_to_opt_id =1
+        obj_to_opt_id =0
         total_opt_steps = 1
-        sim_steps = 100
+        sim_steps = args.steps
 
         t0 = time.time()
-        ti.profiler.print_kernel_profiler_info()
+        ti.profiler.print_kernel_profiler_info('count')
         ti.profiler.clear_kernel_profiler_info()  # Clears all records
 
         # Initial guess of the object density
@@ -68,7 +71,7 @@ if __name__ == "__main__":
                 
             print(f"Iter: {n}, Loss={solver.ps.loss[None]} x avg: {ps.objects_center[obj_to_opt_id]}, object density: {ps.object_density}, object density grad: {ps.object_density.grad} ")
             print(f"........................................ ")
-        ti.profiler.print_kernel_profiler_info()
+        ti.profiler.print_kernel_profiler_info('count')
         # ti.profiler.print_scoped_profiler_info()
         t1 = time.time()
         print(f"Total time cost: {t1 - t0} s")

@@ -2,7 +2,6 @@ from matplotlib.pyplot import axis
 import taichi as ti
 import numpy as np
 
-
 @ti.data_oriented
 class SPHBase:
     def __init__(self, particle_system):
@@ -301,6 +300,34 @@ class SPHBase:
             # if all(abs(R) < 1e-6):
             #     R = ti.Matrix.identity(ti.f32, 3)
             self.ps.R_ret[None] = R
+
+    
+    # @ti.kernel
+    # def polar_decompose(self):
+    #     A = self.ps.A_ret[None]
+    #     assert A.n == 3 and A.m == 3
+
+    #     iters = 5
+    #     rets = get_runtime().prog.current_ast_builder().sifakis_svd_f32(
+    #             A.ptr, iters)
+    #     assert len(rets) == 21
+    #     U_entries = rets[:9]
+    #     V_entries = rets[9:18]
+    #     sig_entries = rets[18:]
+
+    #     U = ti.Matrix.zero(float, 3, 3)
+    #     V = ti.Matrix.zero(float, 3, 3)
+    #     sigma = ti.Matrix.zero(float, 3, 3)
+    #     for i in ti.static(range(3)):
+    #         for j in ti.static(range(3)):
+    #             U[i, j] = U_entries[i * 3 + j]
+    #             V[i, j] = V_entries[i * 3 + j]
+    #         sigma[i, i] = sig_entries[i]
+
+    #     R = U @ V.transpose()
+    #     # if all(abs(R) < 1e-6):
+    #     #     R = ti.Matrix.identity(ti.f32, 3)
+    #     self.ps.R_ret[None] = R
         
     
     # @ti.kernel
@@ -343,7 +370,7 @@ class SPHBase:
         # if all(abs(R) < 1e-6):
         #     R = ti.Matrix.identity(ti.f32, 3)
 
-        self.polar_decompose()
+        # self.polar_decompose()
         
         # for p_i in range(self.ps.particle_num[None]):
         #     if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
