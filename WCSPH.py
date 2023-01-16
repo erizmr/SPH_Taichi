@@ -107,8 +107,10 @@ class WCSPHSolver(SPHBase):
                                 dpj = self.ps.pressure[p_j] / (density_j * density_j)
                                 # Compute the pressure force contribution, Symmetric Formula
                                 self.ps.acceleration[p_i] += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                                    * self.cubic_kernel_derivative((x_i-x_j).norm()) * (x_i - x_j)
+                                    * self.cubic_kernel_derivative((x_i-x_j).norm(1e-5)) * (x_i - x_j)
                                     # * self.cubic_kernel_derivative(x_i-x_j)
+                                    
+                                    
                             elif self.ps.material[p_j] == self.ps.material_solid:
                                 # Boundary neighbors
                                 dpj = self.ps.pressure[p_i] / self.density_0 ** 2
@@ -116,8 +118,10 @@ class WCSPHSolver(SPHBase):
                                 x_j = self.ps.x[p_j]
                                 # Compute the pressure force contribution, Symmetric Formula
                                 f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                                    * self.cubic_kernel_derivative((x_i-x_j).norm()) * (x_i - x_j)
+                                    * self.cubic_kernel_derivative((x_i-x_j).norm(1e-5)) * (x_i - x_j)
                                     # * self.cubic_kernel_derivative(x_i-x_j)
+                                    
+                                    
                                 self.ps.acceleration[p_i] += f_p
 
                                 if self.ps.is_dynamic_rigid_body(p_j):
@@ -212,8 +216,10 @@ class WCSPHSolver(SPHBase):
         
         if self.ps.material[p_j] == self.ps.material_fluid:
             f_v = d * self.viscosity * (self.ps.m[p_j] / (self.ps.density[p_j])) * v_xy / (
-                r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r.norm()) * r
+                r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r.norm(1e-5)) * r
                 # r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
+
+                
             self.ps.acceleration[p_i] += f_v
         # elif self.ps.material[p_j] == self.ps.material_solid:
         #     boundary_viscosity = 0.0
