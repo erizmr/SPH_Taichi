@@ -355,28 +355,7 @@ class SPHBase:
         # cm = self.compute_com(object_id)
 
         self.compute_com_kernel(object_id)
-
-        # cm = self.ps.cm_ret[None]
-        
-        # A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
-        # for p_i in range(self.ps.particle_num[None]):
-        #     if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
-        #         q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id]
-        #         p = self.ps.x[p_i] - cm
-        #         A += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
-
-        # R, S = ti.polar_decompose(A)
-        
-        # if all(abs(R) < 1e-6):
-        #     R = ti.Matrix.identity(ti.f32, 3)
-
-        # self.polar_decompose()
-        
-        # for p_i in range(self.ps.particle_num[None]):
-        #     if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
-        #         goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id])
-        #         corr = (goal - self.ps.x[p_i]) * 1.0
-        #         self.ps.x[p_i] += corr
+        self.polar_decompose()
         self.update_matched_pos(object_id)
 
         # return R
