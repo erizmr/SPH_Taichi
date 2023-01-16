@@ -6,7 +6,7 @@ import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 
-ti.init(arch=ti.gpu, device_memory_GB=8.0, print_ir=False, debug=False, kernel_profiler=True)
+ti.init(arch=ti.gpu, device_memory_GB=4.0, print_ir=False, debug=False, kernel_profiler=True)
 
 
 if __name__ == "__main__":
@@ -43,18 +43,19 @@ if __name__ == "__main__":
 
     # Set target position
     ps.target_position = [2.5, 1.0, 1.0]
+    obj_to_opt_id =0
+    # Initial guess of the object density
+    ps.object_density[None] = 2000
 
     if args.train:
-        obj_to_opt_id =0
+        
         total_opt_steps = 1
         sim_steps = args.steps
 
         t0 = time.time()
-        ti.profiler.print_kernel_profiler_info('count')
+        # ti.profiler.print_kernel_profiler_info('count')
         ti.profiler.clear_kernel_profiler_info()  # Clears all records
 
-        # Initial guess of the object density
-        ps.object_density[None] = 2000
         for n in range(total_opt_steps):
             ps.objects_center[obj_to_opt_id] = [0, 0, 0]
             # Initialize the simulation
@@ -121,6 +122,7 @@ if __name__ == "__main__":
         cnt = 0
         cnt_ply = 0
 
+        solver.set_object_density(obj_to_opt_id)
         while window.running:
             for i in range(substeps):
                 solver.step()
