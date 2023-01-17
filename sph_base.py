@@ -105,7 +105,7 @@ class SPHBase:
         self.ps.initialize_particle_system()
         for r_obj_id in self.ps.object_id_rigid_body:
             self.compute_rigid_rest_cm(r_obj_id)
-        self.compute_static_boundary_volume()
+        # self.compute_static_boundary_volume() # TODO: uncomment this if there are static rigid
         self.compute_moving_boundary_volume()
 
     @ti.kernel
@@ -141,9 +141,9 @@ class SPHBase:
                 for _ in range(1):
                     self.ps.m_V[p_i] = self.cubic_kernel(0.0)
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
-                    center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+                    center_cell = self.ps.pos_to_index(self.ps.x[p_i]) #TODO: no grad version
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
-                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[ti.max(0, grid_index)]):
+                    for p_j in range(self.ps.grid_particles_num[ti.min(ti.max(0, grid_index-1), self.ps.grid_num_total-1)], self.ps.grid_particles_num[ti.min(ti.max(0, grid_index), self.ps.grid_num_total-1)]):
                         if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
                             self.compute_boundary_volume_task(p_i, p_j)
                 for _ in range(1):
@@ -155,21 +155,50 @@ class SPHBase:
         if self.ps.material[p_j] == self.ps.material_solid:
             self.ps.m_V[p_i] += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
 
+    
 
     @ti.kernel
-    def compute_moving_boundary_volume(self):
+    def init_mV(self):
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic_rigid_body(p_i):
-                for _ in range(1):
-                    self.ps.m_V[p_i] = self.cubic_kernel(0.0)
+                self.ps.m_V[p_i] = 8 / 3.1415926 / self.ps.support_radius**self.ps.dim  # self.cubic_kernel(0.0)
+    @ti.kernel
+    def scale_mV(self):
+        for p_i in ti.grouped(self.ps.x):
+            if self.ps.is_dynamic_rigid_body(p_i):
+                self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+    
+    @ti.kernel
+    def compute_moving_boundary_volume_kernel(self):
+        for p_i in ti.grouped(self.ps.x):
+            if self.ps.is_dynamic_rigid_body(p_i):
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
-                    center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+                    center_cell = self.ps.pos_to_index(self.ps.x_val_no_grad[p_i])
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
                     for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[ti.max(0, grid_index)]):
-                        if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+                        if p_i[0] != p_j and (self.ps.x_val_no_grad[p_i] - self.ps.x_val_no_grad[p_j]).norm() < self.ps.support_radius:
                             self.compute_boundary_volume_task(p_i, p_j)
-                for _ in range(1):
-                    self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+    
+
+    def compute_moving_boundary_volume(self):
+        self.ps.copy_x_to_val_no_grad()
+        self.init_mV()
+        self.compute_moving_boundary_volume_kernel()
+        self.scale_mV()
+
+
+    # @ti.kernel
+    # def compute_moving_boundary_volume(self):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.is_dynamic_rigid_body(p_i):
+    #             self.ps.m_V[p_i] = self.cubic_kernel(0.0)
+    #             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+    #                 center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+    #                 grid_index = self.ps.flatten_grid_index(center_cell + offset)
+    #                 for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[ti.max(0, grid_index)]):
+    #                     if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+    #                         self.compute_boundary_volume_task(p_i, p_j)
+    #             self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
 
 
@@ -297,8 +326,8 @@ class SPHBase:
         for _ in range(1):
             U, sig, V = self.ssvd(self.ps.A_ret[None])
             R = U @ V.transpose()
-            # if all(abs(R) < 1e-6):
-            #     R = ti.Matrix.identity(ti.f32, 3)
+            if all(abs(R) < 1e-6):
+                R = ti.Matrix.identity(ti.f32, 3)
             self.ps.R_ret[None] = R
 
     

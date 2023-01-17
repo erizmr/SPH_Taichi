@@ -41,37 +41,105 @@ class WCSPHSolver(SPHBase):
     #             self.ps.density[p_i] += den
     #             self.ps.density[p_i] *= self.density_0
 
-    @ti.func
-    def compute_densities_task(self, p_i, p_j):
-        x_i = self.ps.x[p_i]
-        if self.ps.material[p_j] == self.ps.material_fluid:
-            # Fluid neighbors
-            x_j = self.ps.x[p_j]
-            self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
-        elif self.ps.material[p_j] == self.ps.material_solid:
-            # Boundary neighbors
-            ## Akinci2012
-            x_j = self.ps.x[p_j]
-            self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+    # @ti.func
+    # def compute_densities_task(self, p_i, p_j):
+    #     x_i = self.ps.x[p_i]
+    #     if self.ps.material[p_j] == self.ps.material_fluid:
+    #         # Fluid neighbors
+    #         x_j = self.ps.x[p_j]
+    #         self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+    #     elif self.ps.material[p_j] == self.ps.material_solid:
+    #         # Boundary neighbors
+    #         ## Akinci2012
+    #         x_j = self.ps.x[p_j]
+    #         self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
 
+
+    # @ti.kernel
+    # def compute_densities(self):
+    #     # for p_i in range(self.ps.particle_num[None]):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.material[p_i] == self.ps.material_fluid:
+    #             for _ in range(1):
+    #                 self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
+    #             # den = 0.0
+    #             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+    #                 center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+    #                 grid_index = self.ps.flatten_grid_index(center_cell + offset)
+    #                 for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+    #                     if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+    #                         self.compute_densities_task(p_i, p_j)
+    #             # self.ps.density[p_i] += den
+    #             for _ in range(1):
+    #                 self.ps.density[p_i] *= self.density_0
+    
 
     @ti.kernel
+    def init_densities(self):
+        for p_i in ti.grouped(self.ps.x):
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                self.ps.density[p_i] = self.ps.m_V[p_i] * 8 / 3.1415926 / self.ps.support_radius**self.ps.dim # self.cubic_kernel(0.0)
+    
+    @ti.kernel
+    def scale_densities(self):
+        for p_i in ti.grouped(self.ps.x):
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                self.ps.density[p_i] *= self.density_0
+    
     def compute_densities(self):
+        self.ps.copy_x_to_val_no_grad()
+        self.init_densities()
+        self.compute_densities_kernel()
+        self.scale_densities()
+
+    @ti.kernel
+    def compute_densities_kernel(self):
         # for p_i in range(self.ps.particle_num[None]):
         for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] == self.ps.material_fluid:
-                for _ in range(1):
-                    self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
-                # den = 0.0
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
-                    center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+                    center_cell = self.ps.pos_to_index(self.ps.x_val_no_grad[p_i])
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
-                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
-                        if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
-                            self.compute_densities_task(p_i, p_j)
-                # self.ps.density[p_i] += den
-                for _ in range(1):
-                    self.ps.density[p_i] *= self.density_0
+                    for p_j in range(self.ps.grid_particles_num[ti.min(ti.max(0, grid_index-1), self.ps.grid_num_total-1)], self.ps.grid_particles_num[ti.min(ti.max(0, grid_index), self.ps.grid_num_total-1)]):
+                        if p_i[0] != p_j and (self.ps.x_val_no_grad[p_i] - self.ps.x_val_no_grad[p_j]).norm() < self.ps.support_radius:
+                            x_i = self.ps.x[p_i]
+                            x_j = self.ps.x[p_j]
+                            self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+                            # if self.ps.material[p_j] == self.ps.material_fluid:
+                            #     # Fluid neighbors
+                            #     self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+                            # elif self.ps.material[p_j] == self.ps.material_solid:
+                            #     # Boundary neighbors
+                            #     ## Akinci2012
+                            #     self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+
+    # @ti.kernel
+    # def compute_densities(self):
+    #     # for p_i in range(self.ps.particle_num[None]):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.material[p_i] == self.ps.material_fluid:
+    #             # for _ in range(1):
+    #             self.ps.density[p_i] = self.ps.m_V[p_i] * 8 / 3.1415926 / self.ps.support_radius**self.ps.dim # self.cubic_kernel(0.0)
+    #             # den = 0.0
+    #             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+    #                 center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+    #                 grid_index = self.ps.flatten_grid_index(center_cell + offset)
+    #                 for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+    #                     if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+    #                         x_i = self.ps.x[p_i]
+    #                         x_j = self.ps.x[p_j]
+    #                         self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+
+    #                         # if self.ps.material[p_j] == self.ps.material_fluid:
+    #                         #     # Fluid neighbors
+    #                         #     self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+    #                         # elif self.ps.material[p_j] == self.ps.material_solid:
+    #                         #     # Boundary neighbors
+    #                         #     ## Akinci2012
+    #                         #     self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
+    #             # self.ps.density[p_i] += den
+    #             # for _ in range(1):
+    #             self.ps.density[p_i] *= self.density_0
     
 
     @ti.kernel
@@ -84,22 +152,15 @@ class WCSPHSolver(SPHBase):
 
     @ti.kernel
     def compute_pressure_forces_kernel(self):
-        # for p_i in ti.grouped(self.ps.x):
         for p_i in range(self.ps.particle_max_num):
-            # if self.ps.is_static_rigid_body(p_i):
-            #     self.ps.acceleration[p_i].fill(0)
-            # elif self.ps.is_dynamic_rigid_body(p_i):
-            #     pass
-            # else:
             if self.ps.material[p_i] == self.ps.material_fluid:
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
-                    center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+                    center_cell = self.ps.pos_to_index(self.ps.x_val_no_grad[p_i])
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
-                    x_i = self.ps.x[p_i]
-                    dpi = self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
-                    for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
-                        if p_i != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
-                            
+                    for p_j in range(self.ps.grid_particles_num[ti.min(ti.max(0, grid_index-1), self.ps.grid_num_total-1)], self.ps.grid_particles_num[ti.min(ti.max(0, grid_index), self.ps.grid_num_total-1)]):
+                        if p_i != p_j and (self.ps.x_val_no_grad[p_i] - self.ps.x_val_no_grad[p_j]).norm() < self.ps.support_radius:
+                            x_i = self.ps.x[p_i]
+                            dpi = self.ps.pressure[p_i] / self.ps.density[p_i] ** 2
                             # Fluid neighbors
                             if self.ps.material[p_j] == self.ps.material_fluid:
                                 x_j = self.ps.x[p_j]
@@ -108,7 +169,6 @@ class WCSPHSolver(SPHBase):
                                 # Compute the pressure force contribution, Symmetric Formula
                                 self.ps.acceleration[p_i] += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
                                     * self.cubic_kernel_derivative((x_i-x_j).norm(1e-5)) * (x_i - x_j)
-                                    # * self.cubic_kernel_derivative(x_i-x_j)
                                     
                                     
                             elif self.ps.material[p_j] == self.ps.material_solid:
@@ -119,7 +179,6 @@ class WCSPHSolver(SPHBase):
                                 # Compute the pressure force contribution, Symmetric Formula
                                 f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
                                     * self.cubic_kernel_derivative((x_i-x_j).norm(1e-5)) * (x_i - x_j)
-                                    # * self.cubic_kernel_derivative(x_i-x_j)
                                     
                                     
                                 self.ps.acceleration[p_i] += f_p
@@ -130,6 +189,7 @@ class WCSPHSolver(SPHBase):
                 self.ps.acceleration[p_i].fill(0)
 
     def compute_pressure_forces(self):
+        self.ps.copy_x_to_val_no_grad()
         self.compute_pressure()
         self.compute_pressure_forces_kernel()
 
@@ -232,27 +292,49 @@ class WCSPHSolver(SPHBase):
         #         self.ps.acceleration[p_j] += -f_v * self.density_0 / self.ps.density[p_j]
 
 
-    @ti.kernel
+    # @ti.kernel
+    # def compute_non_pressure_forces(self):
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.is_static_rigid_body(p_i):
+    #             self.ps.acceleration[p_i].fill(0.0)
+    #         else:
+    #             ############## Body force ###############
+    #             # Add body force
+    #             # d_v = ti.Vector(self.g)
+    #             # self.ps.acceleration[p_i] = d_v
+    #             if self.ps.material[p_i] == self.ps.material_fluid:
+    #                 self.ps.acceleration[p_i] = ti.Vector(self.g)
+    #                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+    #                     center_cell = self.ps.pos_to_index(self.ps.x[p_i])
+    #                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
+    #                     for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
+    #                         if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
+    #                             self.compute_non_pressure_forces_task(p_i, p_j)
+    #             else:
+    #                 self.ps.acceleration[p_i] = ti.Vector(self.g)
+    
+
     def compute_non_pressure_forces(self):
+        self.ps.copy_x_to_val_no_grad()
+        self.compute_non_pressure_forces_kernel()
+
+
+    @ti.kernel
+    def compute_non_pressure_forces_kernel(self):
         for p_i in ti.grouped(self.ps.x):
-            if self.ps.is_static_rigid_body(p_i):
-                self.ps.acceleration[p_i].fill(0.0)
+            if self.ps.material[p_i] == self.ps.material_fluid:
+                self.ps.acceleration[p_i] = ti.Vector(self.g)
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
+                    center_cell = self.ps.pos_to_index(self.ps.x_val_no_grad[p_i])
+                    grid_index = self.ps.flatten_grid_index(center_cell + offset)
+                    for p_j in range(self.ps.grid_particles_num[ti.min(ti.max(0, grid_index-1), self.ps.grid_num_total-1)], self.ps.grid_particles_num[ti.min(ti.max(0, grid_index), self.ps.grid_num_total-1)]):
+                        if p_i[0] != p_j and (self.ps.x_val_no_grad[p_i] - self.ps.x_val_no_grad[p_j]).norm() < self.ps.support_radius:
+                            self.compute_non_pressure_forces_task(p_i, p_j)
+            elif self.ps.is_dynamic_rigid_body(p_i):
+                self.ps.acceleration[p_i] = ti.Vector(self.g)
             else:
-                ############## Body force ###############
-                # Add body force
-                # d_v = ti.Vector(self.g)
-                # self.ps.acceleration[p_i] = d_v
-                if self.ps.material[p_i] == self.ps.material_fluid:
-                    for _ in range(1):
-                        self.ps.acceleration[p_i] = ti.Vector(self.g)
-                    for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.ps.dim)):
-                        center_cell = self.ps.pos_to_index(self.ps.x[p_i])
-                        grid_index = self.ps.flatten_grid_index(center_cell + offset)
-                        for p_j in range(self.ps.grid_particles_num[ti.max(0, grid_index-1)], self.ps.grid_particles_num[grid_index]):
-                            if p_i[0] != p_j and (self.ps.x[p_i] - self.ps.x[p_j]).norm() < self.ps.support_radius:
-                                self.compute_non_pressure_forces_task(p_i, p_j)
-                else:
-                    self.ps.acceleration[p_i] = ti.Vector(self.g)
+                self.ps.acceleration[p_i].fill(0.0)
+
 
 
     @ti.kernel

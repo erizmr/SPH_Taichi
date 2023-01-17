@@ -6,8 +6,8 @@ import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 
-ti.init(arch=ti.gpu, device_memory_GB=4.0, print_ir=False, debug=False, kernel_profiler=True)
-
+ti.init(arch=ti.gpu, device_memory_GB=4.0, print_ir=True, debug=False, kernel_profiler=True)
+# ti.init(arch=ti.gpu, device_memory_GB=4.0, kernel_profiler=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SPH Taichi')
@@ -42,10 +42,10 @@ if __name__ == "__main__":
 
 
     # Set target position
-    ps.target_position = [2.5, 1.0, 1.0]
-    obj_to_opt_id =0
+    ps.target_position = [2.0, 1.25, 1.0]
+    obj_to_opt_id =1
     # Initial guess of the object density
-    ps.object_density[None] = 2000
+    ps.object_density[None] = 550
 
     if args.train:
         
@@ -123,6 +123,7 @@ if __name__ == "__main__":
         cnt_ply = 0
 
         solver.set_object_density(obj_to_opt_id)
+        ti.profiler.clear_kernel_profiler_info()  # Clears all records
         while window.running:
             for i in range(substeps):
                 solver.step()
@@ -166,4 +167,6 @@ if __name__ == "__main__":
             if cnt % 3000 == 0:
                 ps.reset()
                 solver.initialize()
+                solver.set_object_density(obj_to_opt_id)
             window.show()
+        ti.profiler.print_kernel_profiler_info('count')

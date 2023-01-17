@@ -46,6 +46,7 @@ class ParticleSystem:
         self.grid_size = self.support_radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid num: ", self.grid_num)
+        self.grid_num_total = self.grid_num[0] * self.grid_num[1] * self.grid_num[2] # TODO: This is not working for 2D
         self.padding = self.grid_size
 
         # All objects id and its particle num
@@ -108,14 +109,17 @@ class ParticleSystem:
 
         # Particle related properties
         self.object_id = ti.field(dtype=int, shape=self.particle_max_num)
-        self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        # self.x_new = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.x_val_no_grad = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+
         self.x_0 = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.acceleration = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.m_V = ti.field(dtype=float, shape=self.particle_max_num)
+        self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.acceleration = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.m_V = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.m = ti.field(dtype=float, shape=self.particle_max_num)
-        self.density = ti.field(dtype=float, shape=self.particle_max_num)
-        self.pressure = ti.field(dtype=float, shape=self.particle_max_num)
+        self.density = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.pressure = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.material = ti.field(dtype=int, shape=self.particle_max_num)
         self.color = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic = ti.field(dtype=int, shape=self.particle_max_num)
@@ -138,14 +142,14 @@ class ParticleSystem:
 
         # Buffer for sort
         self.object_id_buffer = ti.field(dtype=int, shape=self.particle_max_num)
-        self.x_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.x_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.x_0_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.v_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.acceleration_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.m_V_buffer = ti.field(dtype=float, shape=self.particle_max_num)
+        self.v_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.acceleration_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.m_V_buffer = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.m_buffer = ti.field(dtype=float, shape=self.particle_max_num)
-        self.density_buffer = ti.field(dtype=float, shape=self.particle_max_num)
-        self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num)
+        self.density_buffer = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.material_buffer = ti.field(dtype=int, shape=self.particle_max_num)
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic_buffer = ti.field(dtype=int, shape=self.particle_max_num)
@@ -421,6 +425,12 @@ class ParticleSystem:
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
             # if self.grid_particles_num[grid_index] < 0:
             #     print(f"find the index {I} grid_ids_new less than 0: {self.grid_particles_num[grid_index]}, grid index: {grid_index}.")
+    
+    @ti.kernel
+    def copy_x_to_val_no_grad(self):
+        for p_i in ti.grouped(self.x):
+            self.x_val_no_grad[p_i] = self.x[p_i]
+
     
     @ti.kernel
     def copy_grid_particles_to_buffer(self):
