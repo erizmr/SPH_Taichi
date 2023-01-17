@@ -6,7 +6,7 @@ import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 
-ti.init(arch=ti.gpu, device_memory_GB=4.0, print_ir=True, debug=False, kernel_profiler=True)
+ti.init(arch=ti.gpu, device_memory_GB=8.0, print_ir=True, debug=True, kernel_profiler=True)
 # ti.init(arch=ti.gpu, device_memory_GB=4.0, kernel_profiler=True)
 
 if __name__ == "__main__":
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     ps.target_position = [2.0, 1.25, 1.0]
     obj_to_opt_id =1
     # Initial guess of the object density
-    ps.object_density[None] = 550
+    ps.object_density[None] = 1000
 
     if args.train:
         
@@ -63,14 +63,16 @@ if __name__ == "__main__":
             solver.initialize()
             with ti.ad.Tape(loss=solver.ps.loss):
                 solver.set_object_density(obj_to_opt_id)
-                solver.set_object_density(obj_to_opt_id)
                 for i in range(sim_steps):
                     solver.step()
                     print(f"sim step: {i}")
                 solver.compute_avg_pos(obj_to_opt_id, solver.ps.object_collection[obj_to_opt_id]["particleNum"])
                 solver.compute_loss(obj_to_opt_id)
                 
-            print(f"Iter: {n}, Loss={solver.ps.loss[None]} x avg: {ps.objects_center[obj_to_opt_id]}, object density: {ps.object_density}, object density grad: {ps.object_density.grad} ")
+            print(f"Iter: {n}, Loss={solver.ps.loss[None]} x avg: {ps.objects_center[obj_to_opt_id]}, object density: {ps.object_density}, object density grad: {ps.object_density.grad}, density grad: {(ps.density.grad.to_numpy()**2).sum()} ")
+            print(f"object density grad: {ps.density.grad.to_numpy().sum()}, acc grad: {ps.acceleration.grad.to_numpy().sum()} ")
+            print(f"x new grad: {(ps.x_new.grad.to_numpy()**2).sum()}, v new grad: {(ps.v_new.grad.to_numpy()**2).sum()}, object center grad {ps.objects_center.grad[obj_to_opt_id].to_numpy().sum()} ")
+            print(f"x grad: {(ps.x.grad.to_numpy()**2).sum()}, v grad: {(ps.v.grad.to_numpy()**2).sum()}, object center grad {ps.objects_center.grad[obj_to_opt_id].to_numpy().sum()} ")
             print(f"........................................ ")
         ti.profiler.print_kernel_profiler_info('count')
         # ti.profiler.print_scoped_profiler_info()

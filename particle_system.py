@@ -110,11 +110,14 @@ class ParticleSystem:
         # Particle related properties
         self.object_id = ti.field(dtype=int, shape=self.particle_max_num)
         self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
-        # self.x_new = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.x_new = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+
         self.x_val_no_grad = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
 
         self.x_0 = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.v_new = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+
         self.acceleration = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.m_V = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
         self.m = ti.field(dtype=float, shape=self.particle_max_num)
@@ -134,6 +137,7 @@ class ParticleSystem:
         self.objects_center = ti.Vector.field(self.dim, dtype=float, shape=(self.num_rigid_bodies + len(self.fluid_blocks)), needs_grad=True)
         self.sum_ret = ti.field(dtype=float, shape=(), needs_grad=True)
         self.cm_ret = ti.Vector.field(self.dim, dtype=float, shape=(), needs_grad=True)
+        self.cm_ret_new = ti.Vector.field(self.dim, dtype=float, shape=(), needs_grad=True)
         self.A_ret = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=(), needs_grad=True)
         self.R_ret = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=(), needs_grad=True)
         self.volume_ret = ti.field(dtype=float, shape=(), needs_grad=True)
@@ -142,14 +146,14 @@ class ParticleSystem:
 
         # Buffer for sort
         self.object_id_buffer = ti.field(dtype=int, shape=self.particle_max_num)
-        self.x_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.x_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.x_0_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.v_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
-        self.acceleration_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num, needs_grad=True)
-        self.m_V_buffer = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.v_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.acceleration_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.m_V_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.m_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.density_buffer = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
-        self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num, needs_grad=True)
+        self.pressure_buffer = ti.field(dtype=float, shape=self.particle_max_num)
         self.material_buffer = ti.field(dtype=int, shape=self.particle_max_num)
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic_buffer = ti.field(dtype=int, shape=self.particle_max_num)
@@ -435,6 +439,7 @@ class ParticleSystem:
     @ti.kernel
     def copy_grid_particles_to_buffer(self):
         for I in ti.grouped(self.grid_particles_num):
+            self.grid_particles_num[I] = ti.min(ti.max(0, self.grid_particles_num[I]), self.particle_max_num - 1)
             self.grid_particles_num_temp[I] = self.grid_particles_num[I]
             if self.grid_particles_num[I] < 0:
                 print(f"find the index {I} grid_ids_new less than 0: {self.grid_particles_num[I]}, grid index: {I}.")

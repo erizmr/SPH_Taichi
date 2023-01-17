@@ -336,21 +336,30 @@ class WCSPHSolver(SPHBase):
                 self.ps.acceleration[p_i].fill(0.0)
 
 
+    # @ti.kernel
+    # def advect(self):
+    #     # Symplectic Euler
+    #     for p_i in ti.grouped(self.ps.x):
+    #         if self.ps.is_dynamic[p_i]:
+    #             self.ps.v[p_i] += self.ps.dt[None] * self.ps.acceleration[p_i]
+    #             self.ps.x[p_i] += self.ps.dt[None] * self.ps.v[p_i]
+
 
     @ti.kernel
     def advect(self):
         # Symplectic Euler
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:
-                self.ps.v[p_i] += self.ps.dt[None] * self.ps.acceleration[p_i]
-                self.ps.x[p_i] += self.ps.dt[None] * self.ps.v[p_i]
-
+                self.ps.v_new[p_i] = self.ps.v[p_i] + self.ps.dt[None] * self.ps.acceleration[p_i]
+                self.ps.x_new[p_i] = self.ps.x[p_i] + self.ps.dt[None] * self.ps.v_new[p_i]
+    
 
     def substep(self):
         self.compute_densities()
         self.compute_non_pressure_forces()
         self.compute_pressure_forces()
         self.advect()
+        self.copy_fields()
 
 
     @ti.kernel
