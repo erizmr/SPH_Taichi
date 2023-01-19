@@ -2,7 +2,7 @@
 	"Configuration": 
 	{
         "domainStart": [0.0, 0.0, 0.0],
-        "domainEnd": [3.5, 3.0, 2.0],
+        "domainEnd": [0.3, 0.3, 0.3],
 		"particleRadius": 0.01,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000, 
@@ -20,10 +20,10 @@
 		{
             "objectId": 1,
 			"geometryFile": "./data/models/lock.obj",
-			"translation": [2.0, 1.0, 1.0],
+			"translation": [0.1, 0.1, 0.1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0,
-			"scale": [0.5, 0.5, 0.5],
+			"scale": [0.1, 0.1, 0.1],
 			"velocity": [0.0, 0.0, 0.0],
 			"density": 1000.0,
 			"color": [255, 255, 255], 
@@ -33,9 +33,9 @@
 	"FluidBlocks": [
 		{
             "objectId": 0,
-			"start": [0.1, 0.1, 0.2],
-			"end": [1.2, 0.5, 1.5],
-			"translation": [0.1, 0.0, 0.2],
+			"start": [0.1, 0.1, 0.1],
+			"end": [0.16, 0.16, 0.16],
+			"translation": [0.1, 0.0, 0.1],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, -2.0, 0.0],
 			"density": 1000.0,

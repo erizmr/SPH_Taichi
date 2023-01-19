@@ -165,7 +165,7 @@ class SPHBase:
     def scale_mV(self):
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic_rigid_body(p_i):
-                self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+                self.ps.m_V[p_i] = 1.0 / self.ps.m_V[p_i] * 1.2  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
     
     @ti.kernel
     def compute_moving_boundary_volume_kernel(self):
@@ -175,8 +175,8 @@ class SPHBase:
                     center_cell = self.ps.pos_to_index(self.ps.x_val_no_grad[p_i])
                     grid_index = self.ps.flatten_grid_index(center_cell + offset)
                     for p_j in range(self.ps.grid_particles_num[ti.min(ti.max(0, grid_index-1), self.ps.grid_num_total-1)], self.ps.grid_particles_num[ti.min(ti.max(0, grid_index), self.ps.grid_num_total-1)]):
-                        if p_i[0] != p_j and (self.ps.x_val_no_grad[p_i] - self.ps.x_val_no_grad[ti.min(ti.max(p_j, 0), self.ps.particle_max_num)]).norm() < self.ps.support_radius:
-                            self.compute_boundary_volume_task(p_i, ti.min(ti.max(p_j, 0), self.ps.particle_max_num))
+                        if p_i[0] != p_j and (self.ps.x_val_no_grad[p_i] - self.ps.x_val_no_grad[p_j]).norm() < self.ps.support_radius:
+                            self.compute_boundary_volume_task(p_i, p_j)
     
 
     def compute_moving_boundary_volume(self):
@@ -302,6 +302,17 @@ class SPHBase:
                 if pos[2] <= self.ps.padding:
                     collision_normal[2] += -1.0
                     self.ps.x_new[p_i][2] = self.ps.padding
+                
+
+                # if pos[0] > 2.3 and pos[2] < 0.4:
+                #     collision_normal[0] += 1.0
+                #     self.ps.x_new[p_i][0] = 2.0
+                #     self.ps.x_new[p_i][2] = 4.0
+                
+                # if pos[0] > 2.0 and pos[2] < 0.4:
+                #     collision_normal[0] += 1.0
+                #     self.ps.x_new[p_i][0] = 2.0
+                #     self.ps.x_new[p_i][2] = 4.0
 
                 collision_normal_length = collision_normal.norm()
                 if collision_normal_length > 1e-6:
@@ -424,10 +435,7 @@ class SPHBase:
                 self.ps.x_new[p_i] = self.ps.x[p_i]
 
 
-    # @ti.kernel
     def solve_constraints(self, object_id: int): #-> ti.types.matrix(3, 3, float):
-        # compute center of mass
-        # cm = self.compute_com(object_id)
 
         self.compute_com_rigid(object_id)
         self.compute_A(object_id)
@@ -445,11 +453,12 @@ class SPHBase:
                 if self.ps.cfg.get_cfg("exportObj"):
                     R = self.ps.R_ret[None]
                     # For output obj only: update the mesh
-                    cm = self.compute_com_kernel(r_obj_id)
+                    # cm = self.compute_com_kernel(r_obj_id)
+                    cm = self.ps.cm_ret_new[None]
                     ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
                     self.ps.object_collection[r_obj_id]["mesh"].vertices = cm.to_numpy() + ret.T
-
                 self.enforce_boundary_3D(self.ps.material_solid)
+
 
 
     @ti.kernel
@@ -461,7 +470,7 @@ class SPHBase:
 
     def step(self):
         self.ps.initialize_particle_system()
-        # self.compute_moving_boundary_volume()
+        self.compute_moving_boundary_volume()
         self.substep()
         self.solve_rigid_body()
         if self.ps.dim == 2:

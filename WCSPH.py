@@ -254,16 +254,16 @@ class WCSPHSolver(SPHBase):
         x_i = self.ps.x[p_i]
         
         ############## Surface Tension ###############
-        # if self.ps.material[p_j] == self.ps.material_fluid:
-        #     # Fluid neighbors
-        #     diameter2 = self.ps.particle_diameter * self.ps.particle_diameter
-        #     x_j = self.ps.x[p_j]
-        #     r = x_i - x_j
-        #     r2 = r.dot(r)
-        #     if r2 > diameter2:
-        #         self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(r.norm())
-        #     else:
-        #         self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(ti.Vector([self.ps.particle_diameter, 0.0, 0.0]).norm())
+        if self.ps.material[p_j] == self.ps.material_fluid:
+            # Fluid neighbors
+            diameter2 = self.ps.particle_diameter * self.ps.particle_diameter
+            x_j = self.ps.x[p_j]
+            r = x_i - x_j
+            r2 = r.dot(r)
+            if r2 > diameter2:
+                self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(r.norm())
+            else:
+                self.ps.acceleration[p_i] -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(ti.Vector([self.ps.particle_diameter, 0.0, 0.0]).norm())
             
         
         ############### Viscosoty Force ###############
@@ -281,15 +281,15 @@ class WCSPHSolver(SPHBase):
 
                 
             self.ps.acceleration[p_i] += f_v
-        # elif self.ps.material[p_j] == self.ps.material_solid:
-        #     boundary_viscosity = 0.0
-        #     # Boundary neighbors
-        #     ## Akinci2012
-        #     f_v = d * boundary_viscosity * (self.density_0 * self.ps.m_V[p_j] / (self.ps.density[p_i])) * v_xy / (
-        #         r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
-        #     self.ps.acceleration[p_i] += f_v
-        #     if self.ps.is_dynamic_rigid_body(p_j):
-        #         self.ps.acceleration[p_j] += -f_v * self.density_0 / self.ps.density[p_j]
+        elif self.ps.material[p_j] == self.ps.material_solid:
+            boundary_viscosity = 0.01
+            # Boundary neighbors
+            ## Akinci2012
+            f_v = d * boundary_viscosity * (self.density_0 * self.ps.m_V[p_j] / (self.ps.density[p_i])) * v_xy / (
+                r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r.norm(1e-5)) * r
+            self.ps.acceleration[p_i] += f_v
+            if self.ps.is_dynamic_rigid_body(p_j):
+                self.ps.acceleration[p_j] += -f_v * self.density_0 / self.ps.density[p_j]
 
 
     # @ti.kernel

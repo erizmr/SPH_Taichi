@@ -6,7 +6,7 @@ import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 
-ti.init(arch=ti.gpu, device_memory_GB=8.0, print_ir=True, debug=True, kernel_profiler=True)
+ti.init(arch=ti.gpu, device_memory_GB=8.0, print_ir=False, debug=False, kernel_profiler=True)
 # ti.init(arch=ti.gpu, device_memory_GB=4.0, kernel_profiler=True)
 
 if __name__ == "__main__":
@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
     output_frames = config.get_cfg("exportFrame")
-    output_interval = int(0.016 / config.get_cfg("timeStepSize"))
+    output_interval = int(0.016 / config.get_cfg("timeStepSize")/2)
     output_ply = config.get_cfg("exportObj")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
@@ -42,10 +42,10 @@ if __name__ == "__main__":
 
 
     # Set target position
-    ps.target_position = [2.0, 1.25, 1.0]
-    obj_to_opt_id =1
+    ps.target_position = [3.6, 0.65, 0.6]
+    obj_to_opt_id =2
     # Initial guess of the object density
-    ps.object_density[None] = 1000
+    ps.object_density[None] = 400
 
     if args.train:
         
@@ -59,8 +59,9 @@ if __name__ == "__main__":
         for n in range(total_opt_steps):
             ps.objects_center[obj_to_opt_id] = [0, 0, 0]
             # Initialize the simulation
-            ps.reset()
-            solver.initialize()
+            if n != 0:
+                ps.reset()
+                solver.initialize()
             with ti.ad.Tape(loss=solver.ps.loss):
                 solver.set_object_density(obj_to_opt_id)
                 for i in range(sim_steps):
@@ -80,13 +81,13 @@ if __name__ == "__main__":
         print(f"Total time cost: {t1 - t0} s")
     else:
 
-        window = ti.ui.Window('SPH', (1024, 1024), show_window=True, vsync=True)
+        window = ti.ui.Window('SPH', (1024, 1024), show_window=True, vsync=False)
 
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.position(5.5, 2.5, 4.0)
         camera.up(0.0, 1.0, 0.0)
-        camera.lookat(-1.0, 0.0, 0.0)
+        camera.lookat(1.0, 0.0, 0.0)
         camera.fov(70)
         scene.set_camera(camera)
 
@@ -99,7 +100,7 @@ if __name__ == "__main__":
         # Invisible objects
         invisible_objects = config.get_cfg("invisibleObjects")
         if not invisible_objects:
-            invisible_objects = []
+            invisible_objects = [2]
 
         # Draw the lines for domain
         x_max, y_max, z_max = config.get_cfg("domainEnd")
@@ -124,7 +125,7 @@ if __name__ == "__main__":
         cnt = 0
         cnt_ply = 0
 
-        solver.set_object_density(obj_to_opt_id)
+        # solver.set_object_density(obj_to_opt_id)
         ti.profiler.clear_kernel_profiler_info()  # Clears all records
         while window.running:
             for i in range(substeps):
@@ -149,12 +150,17 @@ if __name__ == "__main__":
                     window.save_image(f"{scene_name}_output_img/{cnt:06}.png")
             if output_ply:
                 if cnt % output_interval == 0:
-                    obj_id = 0
-                    obj_data = ps.dump(obj_id=obj_id)
-                    np_pos = obj_data["position"]
-                    writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
+                    # obj_id = 0
+                    # for obj_id in [0, 1]:
+                    # obj_data = ps.dump(obj_id=0)
+                    # np_pos = obj_data["position"]
+                    fluid_num = ps.object_collection[0]["particleNum"]+ps.object_collection[1]["particleNum"]
+                    np_pos = ps.x_vis_buffer.to_numpy()[:fluid_num, :]
+                    print(np_pos.shape, fluid_num)
+                    writer = ti.tools.PLYWriter(num_vertices=fluid_num)
                     writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                     writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
+
                     
                     for r_body_id in ps.object_id_rigid_body:
                         with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
@@ -164,11 +170,11 @@ if __name__ == "__main__":
 
             cnt += 1
             print(f"Frame: {cnt}, Substeps: {int(cnt*substeps)}.")
-            # if cnt > 6000:
-            #     break
+            if cnt >= 3000:
+                break
             if cnt % 3000 == 0:
                 ps.reset()
                 solver.initialize()
-                solver.set_object_density(obj_to_opt_id)
+                # solver.set_object_density(obj_to_opt_id)
             window.show()
         ti.profiler.print_kernel_profiler_info('count')

@@ -46,7 +46,8 @@ class ParticleSystem:
         self.grid_size = self.support_radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid num: ", self.grid_num)
-        self.grid_num_total = self.grid_num[0] * self.grid_num[1] * self.grid_num[2] # TODO: This is not working for 2D
+        self.grid_num_total = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]) # TODO: This is not working for 2D
+        print("grid num total: ", self.grid_num_total)
         self.padding = self.grid_size
 
         # All objects id and its particle num
@@ -383,6 +384,9 @@ class ParticleSystem:
 
     @ti.func
     def pos_to_index(self, pos):
+        ret = (pos / self.grid_size).cast(int)
+        if ret[0] >= self.grid_num[0] or ret[1] >= self.grid_num[1] or ret[2] >= self.grid_num[2]:
+            print(f"pos to index  {(pos / self.grid_size).cast(int)}, pos {pos}, grid size {self.grid_size}")
         return (pos / self.grid_size).cast(int)
 
 
@@ -427,8 +431,6 @@ class ParticleSystem:
             grid_index = self.get_flatten_grid_index(self.x[I])
             self.grid_ids[I] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
-            # if self.grid_particles_num[grid_index] < 0:
-            #     print(f"find the index {I} grid_ids_new less than 0: {self.grid_particles_num[grid_index]}, grid index: {grid_index}.")
     
     @ti.kernel
     def copy_x_to_val_no_grad(self):
@@ -441,8 +443,6 @@ class ParticleSystem:
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I] = ti.min(ti.max(0, self.grid_particles_num[I]), self.particle_max_num - 1)
             self.grid_particles_num_temp[I] = self.grid_particles_num[I]
-            if self.grid_particles_num[I] < 0:
-                print(f"find the index {I} grid_ids_new less than 0: {self.grid_particles_num[I]}, grid index: {I}.")
 
 
     def update_grid_id(self):
@@ -574,12 +574,31 @@ class ParticleSystem:
 
     @ti.ad.no_grad
     def prefix_sum(self):
+        self.update_grid_id()
         self.prefix_sum_executor.run(self.grid_particles_num)
-        
+    
+
+    @ti.ad.grad_replaced
+    def print_before_info(self):
+        print(f"before grid particle num: {self.grid_particles_num}")
+
+    @ti.ad.grad_for(print_before_info)
+    def print_before_info_grad(self):
+        print(f"[grad] before grid particle num: {self.grid_particles_num}")
+
+    @ti.ad.grad_replaced
+    def print_after_info(self):
+        print(f"after grid particle num: {self.grid_particles_num}")
+    
+    @ti.ad.grad_for(print_after_info)
+    def print_after_info_grad(self):
+        print(f"[grad] after grid particle num: {self.grid_particles_num}")
 
     def initialize_particle_system(self):
-        self.update_grid_id()
+        # self.update_grid_id()
+        # self.print_before_info()
         self.prefix_sum()
+        # self.print_after_info()
         self.counting_sort()
     
 
@@ -595,7 +614,7 @@ class ParticleSystem:
 
     @ti.kernel
     def copy_to_numpy_nd(self, obj_id: int, np_arr: ti.types.ndarray(), src_arr: ti.template()):
-        for i in range(self.particle_num[None]):
+        for i in range(self.particle_max_num):
             if self.object_id[i] == obj_id:
                 for j in ti.static(range(self.dim)):
                     np_arr[i, j] = src_arr[i][j]
@@ -666,10 +685,10 @@ class ParticleSystem:
     def dump(self, obj_id):
         particle_num = self.object_collection[obj_id]["particleNum"]
         np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
-        self.copy_to_numpy_nd(obj_id, np_x, self.x)
+        self.copy_to_numpy_nd(obj_id, np_x, self.x_new)
 
         np_v = np.ndarray((particle_num, self.dim), dtype=np.float32)
-        self.copy_to_numpy_nd(obj_id, np_v, self.v)
+        self.copy_to_numpy_nd(obj_id, np_v, self.v_new)
 
         return {
             'position': np_x,
@@ -696,6 +715,7 @@ class ParticleSystem:
             rigid_body["mesh"] = mesh_backup
             rigid_body["restPosition"] = mesh_backup.vertices
             rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
+            # print(rigid_body["restCenterOfMass"])
             is_success = tm.repair.fill_holes(mesh)
             # print("Is the mesh successfully repaired? ", is_success)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
