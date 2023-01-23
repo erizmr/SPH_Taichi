@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
     output_frames = config.get_cfg("exportFrame")
-    output_interval = int(0.016 / config.get_cfg("timeStepSize")/2)
+    output_interval = int(0.016 / config.get_cfg("timeStepSize")/4)
     output_ply = config.get_cfg("exportObj")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         print(f"Total time cost: {t1 - t0} s")
     else:
 
-        window = ti.ui.Window('SPH', (1024, 1024), show_window=True, vsync=False)
+        window = ti.ui.Window('SPH', (1024, 1024), show_window=False, vsync=False)
 
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
                 # scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
                 scene.particles(target_position_vis, radius=ps.particle_radius * 10, color=(1.0, 0.1, 0.1))
-                canvas.scene(scene)
+                # canvas.scene(scene)
         
             if output_frames:
                 if cnt % output_interval == 0:
@@ -176,5 +176,5 @@ if __name__ == "__main__":
                 ps.reset()
                 solver.initialize()
                 # solver.set_object_density(obj_to_opt_id)
-            window.show()
+            # window.show()
         ti.profiler.print_kernel_profiler_info('count')
