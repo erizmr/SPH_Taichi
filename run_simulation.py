@@ -21,7 +21,7 @@ if __name__ == "__main__":
     substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
     output_frames = config.get_cfg("exportFrame")
     output_interval = int(0.016 / config.get_cfg("timeStepSize"))
-    output_ply = config.get_cfg("exportObj")
+    output_ply = config.get_cfg("exportPly")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
         os.makedirs(f"{scene_name}_output_img", exist_ok=True)
