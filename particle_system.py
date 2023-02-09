@@ -480,15 +480,13 @@ class ParticleSystem:
         rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
         mesh.apply_transform(rot_matrix)
         
-        is_dynamic = rigid_body["isDynamic"]
-        if is_dynamic:
-            # Backup the original mesh for exporting obj
-            mesh_backup = mesh.copy()
-            mesh_backup.vertices += offset
-            rigid_body["mesh"] = mesh_backup
-            rigid_body["restPosition"] = mesh_backup.vertices
-            rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
-            is_success = tm.repair.fill_holes(mesh)
+        # Backup the original mesh for exporting obj
+        mesh_backup = mesh.copy()
+        mesh_backup.vertices += offset
+        rigid_body["mesh"] = mesh_backup
+        rigid_body["restPosition"] = mesh_backup.vertices
+        rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
+        is_success = tm.repair.fill_holes(mesh)
             # print("Is the mesh successfully repaired? ", is_success)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()

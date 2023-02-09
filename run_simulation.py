@@ -22,6 +22,7 @@ if __name__ == "__main__":
     output_frames = config.get_cfg("exportFrame")
     output_interval = int(0.016 / config.get_cfg("timeStepSize"))
     output_ply = config.get_cfg("exportPly")
+    output_obj = config.get_cfg("exportObj")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
         os.makedirs(f"{scene_name}_output_img", exist_ok=True)
@@ -95,20 +96,21 @@ if __name__ == "__main__":
         if output_frames:
             if cnt % output_interval == 0:
                 window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
-        if output_ply:
-            if cnt % output_interval == 0:
+        
+        if cnt % output_interval == 0:
+            if output_ply:
                 obj_id = 0
                 obj_data = ps.dump(obj_id=obj_id)
                 np_pos = obj_data["position"]
                 writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
                 writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                 writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
-                
+            if output_obj:
                 for r_body_id in ps.object_id_rigid_body:
                     with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
                         e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
                         f.write(e)
-                cnt_ply += 1
+            cnt_ply += 1
 
         cnt += 1
         # if cnt > 6000:
