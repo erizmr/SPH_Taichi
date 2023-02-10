@@ -247,16 +247,17 @@ class SPHBase:
     def solve_rigid_body(self):
         for i in range(1):
             for r_obj_id in self.ps.object_id_rigid_body:
-                R = self.solve_constraints(r_obj_id)
+                if self.ps.object_collection[r_obj_id]["isDynamic"]:
+                    R = self.solve_constraints(r_obj_id)
 
-                if self.ps.cfg.get_cfg("exportObj"):
-                    # For output obj only: update the mesh
-                    cm = self.compute_com_kernel(r_obj_id)
-                    ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
-                    self.ps.object_collection[r_obj_id]["mesh"].vertices = cm.to_numpy() + ret.T
+                    if self.ps.cfg.get_cfg("exportObj"):
+                        # For output obj only: update the mesh
+                        cm = self.compute_com_kernel(r_obj_id)
+                        ret = R.to_numpy() @ (self.ps.object_collection[r_obj_id]["restPosition"] - self.ps.object_collection[r_obj_id]["restCenterOfMass"]).T
+                        self.ps.object_collection[r_obj_id]["mesh"].vertices = cm.to_numpy() + ret.T
 
-                # self.compute_rigid_collision()
-                self.enforce_boundary_3D(self.ps.material_solid)
+                    # self.compute_rigid_collision()
+                    self.enforce_boundary_3D(self.ps.material_solid)
 
 
     def step(self):
