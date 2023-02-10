@@ -384,14 +384,6 @@ class ParticleSystem:
                 if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
                     task(p_i, p_j, ret)
 
-
-    @ti.kernel
-    def copy_to_numpy_nd(self, obj_id: int, np_arr: ti.types.ndarray(), src_arr: ti.template()):
-        for i in range(self.particle_num[None]):
-            if self.object_id[i] == obj_id:
-                for j in ti.static(range(self.dim)):
-                    np_arr[i, j] = src_arr[i][j]
-
     @ti.kernel
     def copy_to_numpy(self, np_arr: ti.types.ndarray(), src_arr: ti.template()):
         for i in range(self.particle_num[None]):
@@ -414,54 +406,11 @@ class ParticleSystem:
                 self.x_vis_buffer[i] = self.x[i]
                 self.color_vis_buffer[i] = self.color[i] / 255.0
 
-    # def dump(self):
-    #     np_x = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
-    #     self.copy_to_numpy_nd(np_x, self.x)
-
-    #     np_v = np.ndarray((self.particle_num[None], self.dim), dtype=np.float32)
-    #     self.copy_to_numpy_nd(np_v, self.v)
-
-    #     np_material = np.ndarray((self.particle_num[None],), dtype=np.int32)
-    #     self.copy_to_numpy(np_material, self.material)
-
-    #     np_color = np.ndarray((self.particle_num[None],), dtype=np.int32)
-    #     self.copy_to_numpy(np_color, self.color)
-
-    #     return {
-    #         'position': np_x,
-    #         'velocity': np_v,
-    #         'material': np_material,
-    #         'color': np_color
-    #     }
-    
-    # def dump(self, obj_id):
-    #     particle_num = self.object_collection[obj_id]
-    #     np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
-    #     self.copy_to_numpy_nd(obj_id, np_x, self.x)
-
-    #     np_v = np.ndarray((particle_num, self.dim), dtype=np.float32)
-    #     self.copy_to_numpy_nd(obj_id, np_v, self.v)
-
-    #     np_material = np.ndarray((particle_num,), dtype=np.int32)
-    #     self.copy_to_numpy(obj_id, np_material, self.material)
-
-    #     np_color = np.ndarray((particle_num,), dtype=np.int32)
-    #     self.copy_to_numpy(obj_id, np_color, self.color)
-
-    #     return {
-    #         'position': np_x,
-    #         'velocity': np_v,
-    #         'material': np_material,
-    #         'color': np_color
-    #     }
-
     def dump(self, obj_id):
-        particle_num = self.object_collection[obj_id]["particleNum"]
-        np_x = np.ndarray((particle_num, self.dim), dtype=np.float32)
-        self.copy_to_numpy_nd(obj_id, np_x, self.x)
-
-        np_v = np.ndarray((particle_num, self.dim), dtype=np.float32)
-        self.copy_to_numpy_nd(obj_id, np_v, self.v)
+        np_object_id = self.object_id.to_numpy()
+        mask = (np_object_id == obj_id).nonzero()
+        np_x = self.x.to_numpy()[mask]
+        np_v = self.v.to_numpy()[mask]
 
         return {
             'position': np_x,
@@ -479,10 +428,10 @@ class ParticleSystem:
         direction = rigid_body["rotationAxis"]
         rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
         mesh.apply_transform(rot_matrix)
+        mesh.vertices += offset
         
         # Backup the original mesh for exporting obj
         mesh_backup = mesh.copy()
-        mesh_backup.vertices += offset
         rigid_body["mesh"] = mesh_backup
         rigid_body["restPosition"] = mesh_backup.vertices
         rigid_body["restCenterOfMass"] = mesh_backup.vertices.mean(axis=0)
@@ -492,7 +441,7 @@ class ParticleSystem:
         voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
         # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
         # voxelized_mesh.show()
-        voxelized_points_np = voxelized_mesh.points + offset
+        voxelized_points_np = voxelized_mesh.points
         print(f"rigid body {obj_id} num: {voxelized_points_np.shape[0]}")
         
         return voxelized_points_np
