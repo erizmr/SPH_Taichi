@@ -5,6 +5,7 @@ from functools import reduce
 from config_builder import SimConfig
 from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
+from particle_emitter import Emitter
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
@@ -83,7 +84,11 @@ class ParticleSystem:
         self.num_rigid_bodies = len(rigid_blocks)+len(rigid_bodies)
 
         #### TODO: Handle the Particle Emitter ####
-        # self.particle_max_num += emitted particles
+        self.emitters = self.cfg.get_emitters()
+        for emitter in self.emitters:
+            self.particle_max_num += emitter["max_particles"]
+        # self.particle_max_num += 10000 # emitted particles
+
         print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
 
         #========== Allocate memory ==========#
@@ -209,6 +214,13 @@ class ParticleSystem:
                                np.array([0 for _ in range(num_particles_obj)], dtype=np.int32), # material is solid
                                is_dynamic * np.ones(num_particles_obj, dtype=np.int32), # is_dynamic
                                np.stack([color for _ in range(num_particles_obj)])) # color
+        print("ps initial done")
+        # Handle emitters
+        # for emitter in emitters:
+        #     pass
+    def get_emitter(self):
+        max_particles = self.emitters[0]["max_particles"]
+        return Emitter(self, max_particles)
     
 
     def build_solver(self):
@@ -268,7 +280,7 @@ class ParticleSystem:
                       new_particles_material: ti.types.ndarray(),
                       new_particles_is_dynamic: ti.types.ndarray(),
                       new_particles_color: ti.types.ndarray()):
-        for p in range(self.particle_num[None], self.particle_num[None] + new_particles_num):
+        for p in range(self.particle_num[None], ti.min(self.particle_num[None] + new_particles_num, self.particle_max_num)):
             v = ti.Vector.zero(float, self.dim)
             x = ti.Vector.zero(float, self.dim)
             for d in ti.static(range(self.dim)):
@@ -312,7 +324,8 @@ class ParticleSystem:
     def update_grid_id(self):
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I] = 0
-        for I in ti.grouped(self.x):
+        # for I in ti.grouped(self.x):
+        for I in range(self.particle_num[None]):
             grid_index = self.get_flatten_grid_index(self.x[I])
             self.grid_ids[I] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
@@ -322,14 +335,22 @@ class ParticleSystem:
     @ti.kernel
     def counting_sort(self):
         # FIXME: make it the actual particle num
-        for i in range(self.particle_max_num):
-            I = self.particle_max_num - 1 - i
+        # for i in range(self.particle_max_num):
+        #     I = self.particle_max_num - 1 - i
+        #     base_offset = 0
+        #     if self.grid_ids[I] - 1 >= 0:
+        #         base_offset = self.grid_particles_num[self.grid_ids[I]-1]
+        #     self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
+        
+        for i in range(self.particle_num[None]):
+            I = self.particle_num[None] - 1 - i
             base_offset = 0
             if self.grid_ids[I] - 1 >= 0:
                 base_offset = self.grid_particles_num[self.grid_ids[I]-1]
             self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
 
-        for I in ti.grouped(self.grid_ids):
+        # for I in ti.grouped(self.grid_ids):
+        for I in range(self.particle_num[None]):
             new_index = self.grid_ids_new[I]
             self.grid_ids_buffer[new_index] = self.grid_ids[I]
             self.object_id_buffer[new_index] = self.object_id[I]
@@ -381,8 +402,9 @@ class ParticleSystem:
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
             for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
-                    task(p_i, p_j, ret)
+                if p_i != p_j:
+                    if (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
+                        task(p_i, p_j, ret)
 
     @ti.kernel
     def copy_to_numpy(self, np_arr: ti.types.ndarray(), src_arr: ti.template()):
@@ -401,7 +423,8 @@ class ParticleSystem:
     def _copy_to_vis_buffer(self, obj_id: int):
         assert self.GGUI
         # FIXME: make it equal to actual particle num
-        for i in range(self.particle_max_num):
+        for i in range(self.particle_num[None]):
+        # for i in range(self.particle_max_num):
             if self.object_id[i] == obj_id:
                 self.x_vis_buffer[i] = self.x[i]
                 self.color_vis_buffer[i] = self.color[i] / 255.0
@@ -493,3 +516,4 @@ class ParticleSystem:
         density_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), density if density is not None else 1000.)
         pressure_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), pressure if pressure is not None else 0.)
         self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
+        return num_new_particles

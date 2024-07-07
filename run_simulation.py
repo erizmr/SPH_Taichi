@@ -32,10 +32,12 @@ if __name__ == "__main__":
 
     ps = ParticleSystem(config, GGUI=True)
     solver = ps.build_solver()
+    print("after build oslver")
     solver.initialize()
+    print("solver initialize")
 
     window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)
-
+    print("window")
     scene = ti.ui.Scene()
     camera = ti.ui.Camera()
     camera.position(5.5, 2.5, 4.0)
@@ -76,8 +78,22 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
+    fluid_setting = {  "objectId": 10,
+                        "start": [1.0, 2.1, 1.5],
+                        "end": [1.2, 2.2, 1.6],
+                       "translation": [0.2, 0.0, 0.2],
+                       "scale": [1, 1, 1],
+                       "velocity": [0.0, -5.0, 0.0],
+                       "density": 1000.0,
+                       "color": [50, 100, 200]
+                    }
+    emitter = ps.get_emitter()
+    emitter.reset()
+    
+    print("start viz")
     while window.running:
         for i in range(substeps):
+            emitter.emit(fluid_setting)
             solver.step()
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:

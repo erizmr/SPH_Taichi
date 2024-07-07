@@ -24,6 +24,12 @@ class SimConfig:
         else:
             return []
     
+    def get_emitters(self):
+        if "Emitters" in self.config:
+            return self.config["Emitters"]
+        else:
+            return []
+    
     def get_rigid_blocks(self):
         if "RigidBlocks" in self.config:
             return self.config["RigidBlocks"]

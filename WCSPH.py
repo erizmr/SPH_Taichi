@@ -32,8 +32,8 @@ class WCSPHSolver(SPHBase):
 
     @ti.kernel
     def compute_densities(self):
-        # for p_i in range(self.ps.particle_num[None]):
-        for p_i in ti.grouped(self.ps.x):
+        for p_i in range(self.ps.particle_num[None]):
+        # for p_i in ti.grouped(self.ps.x):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
@@ -69,12 +69,14 @@ class WCSPHSolver(SPHBase):
     
     @ti.kernel
     def compute_pressure_forces(self):
-        for p_i in ti.grouped(self.ps.x):
+        # for p_i in ti.grouped(self.ps.x):
+        for p_i in range(self.ps.particle_num[None]):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
             self.ps.density[p_i] = ti.max(self.ps.density[p_i], self.density_0)
             self.ps.pressure[p_i] = self.stiffness * (ti.pow(self.ps.density[p_i] / self.density_0, self.exponent) - 1.0)
-        for p_i in ti.grouped(self.ps.x):
+        # for p_i in ti.grouped(self.ps.x):
+        for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_static_rigid_body(p_i):
                 self.ps.acceleration[p_i].fill(0)
                 continue
@@ -127,7 +129,8 @@ class WCSPHSolver(SPHBase):
 
     @ti.kernel
     def compute_non_pressure_forces(self):
-        for p_i in ti.grouped(self.ps.x):
+        # for p_i in ti.grouped(self.ps.x):
+        for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_static_rigid_body(p_i):
                 self.ps.acceleration[p_i].fill(0.0)
                 continue
@@ -143,7 +146,8 @@ class WCSPHSolver(SPHBase):
     @ti.kernel
     def advect(self):
         # Symplectic Euler
-        for p_i in ti.grouped(self.ps.x):
+        # for p_i in ti.grouped(self.ps.x):
+        for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_dynamic[p_i]:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
