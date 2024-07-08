@@ -280,7 +280,7 @@ class ParticleSystem:
                       new_particles_material: ti.types.ndarray(),
                       new_particles_is_dynamic: ti.types.ndarray(),
                       new_particles_color: ti.types.ndarray()):
-        for p in range(self.particle_num[None], ti.min(self.particle_num[None] + new_particles_num, self.particle_max_num)):
+        for p in range(self.particle_num[None], self.particle_num[None] + new_particles_num):
             v = ti.Vector.zero(float, self.dim)
             x = ti.Vector.zero(float, self.dim)
             for d in ti.static(range(self.dim)):
@@ -370,7 +370,8 @@ class ParticleSystem:
                 self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
                 self.density_adv_buffer[new_index] = self.density_adv[I]
         
-        for I in ti.grouped(self.x):
+        # for I in ti.grouped(self.x):
+        for I in range(self.particle_num[None]):
             self.grid_ids[I] = self.grid_ids_buffer[I]
             self.object_id[I] = self.object_id_buffer[I]
             self.x_0[I] = self.x_0_buffer[I]

@@ -222,6 +222,7 @@ class Emitter():
     def emit(self, fluid):
         if self._next_particle < self.max_particles:
             obj_id = fluid["objectId"]
+            self.ps.object_collection[obj_id] = fluid
             offset = np.array(fluid["translation"])
             start = np.array(fluid["start"]) + offset
             end = np.array(fluid["end"]) + offset

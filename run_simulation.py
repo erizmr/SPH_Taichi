@@ -36,7 +36,8 @@ if __name__ == "__main__":
     solver.initialize()
     print("solver initialize")
 
-    window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)
+    show_window = False
+    window = ti.ui.Window('SPH', (1024, 1024), show_window = show_window, vsync=False)
     print("window")
     scene = ti.ui.Scene()
     camera = ti.ui.Camera()
@@ -78,29 +79,42 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
 
-    fluid_setting = {  "objectId": 10,
-                        "start": [1.0, 2.1, 1.5],
-                        "end": [1.2, 2.2, 1.6],
-                       "translation": [0.2, 0.0, 0.2],
-                       "scale": [1, 1, 1],
-                       "velocity": [0.0, -5.0, 0.0],
-                       "density": 1000.0,
-                       "color": [50, 100, 200]
-                    }
+    # fluid_setting = {  "objectId": 10,
+    #                     "start": [1.0, 1.1, 1.5],
+    #                     "end": [1.2, 2.2, 1.8],
+    #                    "translation": [0.2, 0.0, 0.2],
+    #                    "scale": [1, 1, 1],
+    #                    "velocity": [0.0, -5.0, 0.0],
+    #                    "density": 1000.0,
+    #                    "color": [50, 100, 200]
+    #                 }
+    fluid_setting = 			{
+            "objectId": 0,
+			"start": [1.0, 1.6, 1.0],
+			"end": [1.2, 1.8, 1.2],
+			"translation": [0.5, 0.3, 0.2],
+			"scale": [1, 1, 1],
+			"velocity": [3.0, -5.0, 0.0],
+			"density": 1000.0,
+			"color": [50, 100, 200]
+		}
     emitter = ps.get_emitter()
     emitter.reset()
     
-    print("start viz")
+    # print("!!!!start viz")
+    
+
     while window.running:
-        for i in range(substeps):
+        if cnt % 100 == 0:
             emitter.emit(fluid_setting)
+        for i in range(substeps):
             solver.step()
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:
             canvas.set_background_color(background_color)
             canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
         elif ps.dim == 3:
-            camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
+            # camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
             scene.set_camera(camera)
 
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
@@ -129,6 +143,10 @@ if __name__ == "__main__":
             cnt_ply += 1
 
         cnt += 1
-        # if cnt > 6000:
-        #     break
-        window.show()
+        if cnt > 6000:
+            break
+        if show_window:
+            window.show()
+        else:
+            if cnt % 10 == 0:
+                window.save_image(f"output_images/output_buffer_emitter_{cnt:06d}.png")
