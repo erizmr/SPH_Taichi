@@ -228,6 +228,13 @@ class Emitter():
             end = np.array(fluid["end"]) + offset
             scale = np.array(fluid["scale"])
             velocity = fluid["velocity"]
+            # Compute the direction in unit vector
+            direction = np.array(fluid["direction"])
+            norm = np.linalg.norm(direction)
+            direction = direction / norm
+            speed = fluid["speed"]
+            velocity = speed * direction
+
             density = fluid["density"]
             color = fluid["color"]
             num_new_particles = self.ps.add_cube(object_id=obj_id,
@@ -238,8 +245,9 @@ class Emitter():
                                     is_dynamic=1, # enforce fluid dynamic
                                     color=color,
                                     material=1) # 1 indicates fluid
-            # num_new_particles = 125
             self._next_particle += num_new_particles
+            if self._next_particle + num_new_particles > self.max_particles:
+                return
             print(f"num new particles {num_new_particles} next particle {self._next_particle} max particles {self.max_particles}")
     @property
     def id(self):

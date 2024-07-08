@@ -94,7 +94,8 @@ if __name__ == "__main__":
 			"end": [1.2, 1.8, 1.2],
 			"translation": [0.5, 0.3, 0.2],
 			"scale": [1, 1, 1],
-			"velocity": [3.0, -5.0, 0.0],
+			"direction": [1.0, -1.0, 0.0],
+            "speed": 3.0,
 			"density": 1000.0,
 			"color": [50, 100, 200]
 		}
