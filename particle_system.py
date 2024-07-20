@@ -95,6 +95,7 @@ class ParticleSystem:
         # Particle num of each grid
         self.num_grids = int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2])
         self.grid_particles_num = ti.field(int, shape=self.num_grids)
+        self.grid_particles_start = ti.field(int, shape=self.num_grids)
         self.grid_particles_num_temp = ti.field(int, shape=self.num_grids)
 
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
@@ -313,6 +314,7 @@ class ParticleSystem:
     def update_grid_id(self):
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I] = 0
+            self.grid_particles_start[I] = 0
         for I in ti.grouped(self.x):
             grid_index = self.get_flatten_grid_index(self.x[I])
             self.grid_ids[I] = grid_index
@@ -328,7 +330,8 @@ class ParticleSystem:
             I = self.particle_max_num - 1 - i
             base_offset = 0
             if self.grid_ids[I] - 1 >= 0:
-                base_offset = self.grid_particles_num[self.grid_ids[I]-1]
+                # base_offset = self.grid_particles_num[self.grid_ids[I]-1]
+                base_offset = self.grid_particles_start[self.grid_ids[I]-1]
             self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
 
         for I in ti.grouped(self.grid_ids):
@@ -370,13 +373,30 @@ class ParticleSystem:
                 self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
                 self.density_adv[I] = self.density_adv_buffer[I]
 
+    # @ti.kernel
+    # def prefix_sum(self):
+    #     cur_cnt = 0
+    #     ti.loop_config(serialize=True)
+    #     for i in range(self.num_grids):
+    #         ti.atomic_add(cur_cnt, self.grid_particles_num[i])
+    #         self.grid_particles_num[i] = cur_cnt
+    
     @ti.kernel
     def prefix_sum(self):
-        cur_cnt = 0
+        cur_cnt = self.grid_particles_num[0]
+        # ti.loop_config(serialize=True)
+        for i in range(1, self.num_grids):
+            self.grid_particles_start[i] = ti.atomic_add(cur_cnt, self.grid_particles_num[i])
+            # self.grid_particles_num[i] = cur_cnt
+    
+    @ti.kernel
+    def prefix_sum(self):
+        cur_cnt = self.grid_particles_num[0]
         ti.loop_config(serialize=True)
-        for i in range(self.num_grids):
-            ti.atomic_add(cur_cnt, self.grid_particles_num[i])
-            self.grid_particles_num[i] = cur_cnt
+        for i in range(1, self.num_grids):
+            self.grid_particles_start[i-1] = ti.atomic_add(cur_cnt, self.grid_particles_num[i])
+        self.grid_particles_start[self.num_grids-1] = cur_cnt
+
 
     def initialize_particle_system(self):
         self.update_grid_id()
@@ -390,7 +410,8 @@ class ParticleSystem:
         center_cell = self.pos_to_index(self.x[p_i])
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
-            for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+            # for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+            for p_j in range(self.grid_particles_start[grid_index], self.grid_particles_start[grid_index] + self.grid_particles_num[grid_index]):
                 if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
                     task(p_i, p_j, ret)
 
