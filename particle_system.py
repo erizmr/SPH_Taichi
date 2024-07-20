@@ -93,8 +93,9 @@ class ParticleSystem:
             self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_rigid_bodies + len(fluid_blocks))
 
         # Particle num of each grid
-        self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
-        self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
+        self.num_grids = int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2])
+        self.grid_particles_num = ti.field(int, shape=self.num_grids)
+        self.grid_particles_num_temp = ti.field(int, shape=self.num_grids)
 
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
@@ -318,7 +319,8 @@ class ParticleSystem:
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num_temp[I] = self.grid_particles_num[I]
-    
+
+
     @ti.kernel
     def counting_sort(self):
         # FIXME: make it the actual particle num
@@ -367,11 +369,19 @@ class ParticleSystem:
             if ti.static(self.simulation_method == 4):
                 self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
                 self.density_adv[I] = self.density_adv_buffer[I]
-    
+
+    @ti.kernel
+    def prefix_sum(self):
+        cur_cnt = 0
+        ti.loop_config(serialize=True)
+        for i in range(self.num_grids):
+            ti.atomic_add(cur_cnt, self.grid_particles_num[i])
+            self.grid_particles_num[i] = cur_cnt
 
     def initialize_particle_system(self):
         self.update_grid_id()
-        self.prefix_sum_executor.run(self.grid_particles_num)
+        self.prefix_sum()
+        # self.prefix_sum_executor.run(self.grid_particles_num)
         self.counting_sort()
     
 
