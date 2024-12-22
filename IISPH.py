@@ -35,11 +35,9 @@ class IISPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 sum_neighbor_inner = ti.Vector([0.0 for _ in range(self.ps.dim)])
                 for k in range(self.ps.fluid_neighbors_num[p_i]):
-                    density_k = self.ps.density[k]
-                    density_k2 = density_k * density_k
-                    p_k = self.ps.fluid_neighbors[p_i, j]
+                    p_k = self.ps.fluid_neighbors[p_i, k]
                     x_k = self.ps.x[p_k]
-                    sum_neighbor_inner += self.ps.m_V[p_k] * self.cubic_kernel_derivative(x_i - x_k) / density_k2
+                    sum_neighbor_inner += self.ps.m_V[p_k] * self.cubic_kernel_derivative(x_i - x_k) / density_i2
 
                 kernel_grad_ij = self.cubic_kernel_derivative(x_i - x_j)
                 sum_neighbor -= (self.ps.m_V[p_j] * sum_neighbor_inner).dot(kernel_grad_ij)
@@ -55,11 +53,9 @@ class IISPHSolver(SPHBase):
                 x_j = self.ps.x[p_j]
                 sum_neighbor_inner = ti.Vector([0.0 for _ in range(self.ps.dim)])
                 for k in range(self.ps.solid_neighbors_num[p_i]):
-                    density_k = self.ps.density[k]
-                    density_k2 = density_k * density_k
-                    p_k = self.ps.solid_neighbors[p_i, j]
+                    p_k = self.ps.solid_neighbors[p_i, k]
                     x_k = self.ps.x[p_k]
-                    sum_neighbor_inner += self.ps.m_V[p_k] * self.cubic_kernel_derivative(x_i - x_k) / density_k2
+                    sum_neighbor_inner += self.ps.m_V[p_k] * self.cubic_kernel_derivative(x_i - x_k) / density_i2
 
                 kernel_grad_ij = self.cubic_kernel_derivative(x_i - x_j)
                 sum_neighbor -= (self.ps.m_V[p_j] * sum_neighbor_inner).dot(kernel_grad_ij)
